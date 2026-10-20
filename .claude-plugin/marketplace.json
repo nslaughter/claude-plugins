@@ -4,7 +4,7 @@
     "name": "Nathan Slaughter"
   },
   "metadata": {
-    "description": "The owner's Claude Code plugins: skills, hooks, and commands."
+    "description": "Claude Code plugins for writing, reading, and reviewing code, infrastructure as code, and config."
   },
   "plugins": []
 }

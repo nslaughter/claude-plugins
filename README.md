@@ -1,6 +1,6 @@
 # claude-plugins
 
-The owner's Claude Code plugin marketplace, named `nslaughter`. Skills and hooks ship inside plugins, and each plugin lives under `plugins/`.
+The owner's Claude Code plugin marketplace, named `nslaughter`. The plugins cover writing, reading, and reviewing code, infrastructure as code, and config. Skills and hooks ship inside plugins, and each plugin lives under `plugins/`.
 
 ## Install
 
@@ -8,8 +8,6 @@ The owner's Claude Code plugin marketplace, named `nslaughter`. Skills and hooks
 /plugin marketplace add nslaughter/claude-plugins
 /plugin install <plugin>@nslaughter
 ```
-
-The repository is private. Adding it uses the local git credentials. Automatic updates at startup need `GITHUB_TOKEN` set in the environment.
 
 ## Layout
 
