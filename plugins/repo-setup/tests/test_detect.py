@@ -50,5 +50,51 @@ class RulesetLookupTest(DetectTest):
         self.assertEqual(out["rulesets"]["ours"], ours)
 
 
+class DefaultBranchTest(DetectTest):
+    def test_reports_the_rulesets_github_applies_to_the_default_branch(self):
+        explicit = self.github.add_ruleset(
+            "explicit ref",
+            conditions={"ref_name": {"include": ["refs/heads/main"], "exclude": []}},
+            rules=FORCE_PUSH_AND_DELETION,
+            applies=True,
+        )
+        excluded = self.github.add_ruleset(
+            "all but main",
+            conditions={"ref_name": {"include": ["~ALL"], "exclude": ["refs/heads/main"]}},
+            rules=FORCE_PUSH_AND_DELETION,
+            applies=False,
+        )
+        out = self.detect_json()
+        targets = {entry["id"]: entry["targets_default_branch"] for entry in out["rulesets"]["existing"]}
+        self.assertEqual(targets, {explicit: True, excluded: False})
+
+    def test_a_disabled_ruleset_counts_as_not_set(self):
+        self.github.add_ruleset(
+            RULESET_NAME,
+            enforcement="disabled",
+            rules=[pull_request_rule(approvals=1)] + FORCE_PUSH_AND_DELETION,
+            bypass_actors=ADMINS_PULL_REQUEST,
+        )
+        options = self.options(self.detect_json())
+        self.assertFalse(options["require_pull_request"]["current"])
+        self.assertFalse(options["resolve_threads"]["current"])
+        self.assertFalse(options["block_force_push_and_deletion"]["current"])
+        self.assertIsNone(options["approvals"]["current"])
+        self.assertIsNone(options["bypass"]["current"])
+
+    def test_an_active_ruleset_counts_as_set(self):
+        self.github.add_ruleset(
+            RULESET_NAME,
+            rules=[pull_request_rule(approvals=1)] + FORCE_PUSH_AND_DELETION,
+            bypass_actors=ADMINS_PULL_REQUEST,
+        )
+        options = self.options(self.detect_json())
+        self.assertTrue(options["require_pull_request"]["current"])
+        self.assertTrue(options["resolve_threads"]["current"])
+        self.assertTrue(options["block_force_push_and_deletion"]["current"])
+        self.assertEqual(options["approvals"]["current"], 1)
+        self.assertEqual(options["bypass"]["current"], "admins_pull_request")
+
+
 if __name__ == "__main__":
     unittest.main()

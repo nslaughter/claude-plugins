@@ -30,9 +30,13 @@ on GitHub Free a private repository's rulesets call refuses, and the reason says
   current settings from `merge`.
 - If `rulesets.available` is false, only the merge settings can be applied. Say why, in the
   API's words, and that a public repository, or a paid plan, would allow the rest.
-- Mention any other ruleset in `rulesets.existing` that targets the default branch, and
+- Mention any other ruleset in `rulesets.existing` whose `targets_default_branch` is true, and
   `classic_protection` when true: this skill leaves both as they are, and their rules apply
-  alongside its own.
+  alongside its own. `targets_default_branch` is GitHub's own answer: the ruleset is enforced
+  and its conditions match the default branch.
+- If `rulesets.ours` names this skill's ruleset but its entry's `targets_default_branch` is
+  false, say so, with its `enforcement` when that isn't `active`: none of its rules is in
+  force, so `current` counts them as not set.
 
 ## 2. Ask
 

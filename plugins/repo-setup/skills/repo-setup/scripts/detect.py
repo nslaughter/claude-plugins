@@ -11,6 +11,11 @@ and its default. Availability is found by asking the API, not by reading the
 plan name, so an organization's plan, a repository's visibility and the
 caller's access all count.
 
+Whether a ruleset applies to the default branch is GitHub's own answer, from
+its branch-rules endpoint, so explicit refs, patterns, exclusions and the
+ruleset's enforcement all count. A rule of the skill's own ruleset counts as
+set only when GitHub enforces it there: a disabled ruleset sets nothing.
+
 Needs only Python 3 and an authenticated `gh`. Reads only; changes nothing.
 """
 
@@ -79,11 +84,6 @@ def current_repo():
     return run.stdout.strip()
 
 
-def targets_default_branch(ruleset):
-    include = ((ruleset.get("conditions") or {}).get("ref_name") or {}).get("include") or []
-    return "~DEFAULT_BRANCH" in include or "~ALL" in include
-
-
 def rule(ruleset, kind):
     return next((r for r in (ruleset or {}).get("rules", []) if r.get("type") == kind), None)
 
@@ -147,8 +147,14 @@ def main():
 
     # Rulesets: whether this repository may have them is the API's answer.
     rulesets_ok, listed = api_pages(f"repos/{repo}/rulesets")
-    existing, ours = [], None
+    existing, ours, applying = [], None, set()
     if rulesets_ok:
+        # The rulesets GitHub enforces on the default branch, by its own reading of
+        # their conditions and enforcement.
+        ok, applied = api_pages(f"repos/{repo}/rules/branches/{branch}")
+        if not ok:
+            sys.exit(f"detect.py: gh api repos/{repo}/rules/branches/{branch}: {applied}")
+        applying = {r.get("ruleset_id") for r in applied}
         for summary in listed or []:
             ok, ruleset = api(f"repos/{repo}/rulesets/{summary['id']}")
             if not ok:
@@ -158,7 +164,7 @@ def main():
                 "name": ruleset["name"],
                 "enforcement": ruleset.get("enforcement"),
                 "source": ruleset.get("source"),
-                "targets_default_branch": targets_default_branch(ruleset),
+                "targets_default_branch": ruleset["id"] in applying,
             }
             existing.append(entry)
             if ruleset["name"] == RULESET_NAME and (ruleset.get("source") or "").lower() == repo.lower():
@@ -180,8 +186,10 @@ def main():
         )
 
     checks, checks_source = check_names(repo, branch)
-    pull = rule(ours, "pull_request")
-    status_rule = rule(ours, "required_status_checks")
+    # Only what GitHub enforces on the default branch is already set.
+    enforced = ours if ours is not None and ours["id"] in applying else None
+    pull = rule(enforced, "pull_request")
+    status_rule = rule(enforced, "required_status_checks")
 
     not_admin = f"{viewer} doesn't have admin access to {repo}, which changing its settings needs."
     rules_reason = not_admin if not is_admin else (None if rulesets_ok else listed)
@@ -269,7 +277,7 @@ def main():
             f"Block force pushes to {branch} and deleting it",
             available=can_rule,
             reason=rules_reason,
-            current=rule(ours, "non_fast_forward") is not None and rule(ours, "deletion") is not None,
+            current=rule(enforced, "non_fast_forward") is not None and rule(enforced, "deletion") is not None,
             default=True,
         ),
         option(
@@ -289,7 +297,7 @@ def main():
             description=f"Rulesets grant a bypass to a role, not to one person. Admin here is {admin_holders}.",
             available=can_rule,
             reason=rules_reason,
-            current=bypass_of(ours),
+            current=bypass_of(enforced),
             default="admins_pull_request",
         ),
     ]
