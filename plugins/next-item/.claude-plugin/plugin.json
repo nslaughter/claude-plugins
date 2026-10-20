@@ -1,0 +1,8 @@
+{
+  "name": "next-item",
+  "version": "0.1.0",
+  "description": "Does the next item of a repository's implementation plan by following the \"Doing the next item\" section of its AGENTS.md.",
+  "author": {
+    "name": "Nathan Slaughter"
+  }
+}

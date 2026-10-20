@@ -9,6 +9,11 @@ The owner's Claude Code plugin marketplace, named `nslaughter`. The plugins cove
 /plugin install <plugin>@nslaughter
 ```
 
+## Plugins
+
+- **iterative-review**: a review-and-fix loop on a pull request. Codex and a fresh Claude reviewer review in parallel, a Claude fix agent addresses the findings, Codex reviews the fixes, and Claude fixes again. Needs `gh`; the Codex CLI is optional.
+- **next-item**: does the next item of a repository's implementation plan by following the "Doing the next item" section of its `AGENTS.md`.
+
 ## Layout
 
 ```
@@ -25,3 +30,4 @@ plugins/<plugin>/
 2. Add an entry to `plugins` in `.claude-plugin/marketplace.json`:
    `{ "name": "<plugin>", "source": "./plugins/<plugin>", "description": "..." }`
 3. Run `claude plugin validate .` before pushing.
+4. Bump `version` in a plugin's `plugin.json` whenever it changes. Installed copies update only when the version changes.

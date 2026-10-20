@@ -6,5 +6,16 @@
   "metadata": {
     "description": "Claude Code plugins for writing, reading, and reviewing code, infrastructure as code, and config."
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "iterative-review",
+      "source": "./plugins/iterative-review",
+      "description": "Runs a review-and-fix loop on a pull request: Codex and a fresh Claude reviewer review in parallel, a Claude fix agent addresses the findings, Codex reviews the fixes, and Claude fixes again. Needs gh; the Codex CLI is optional."
+    },
+    {
+      "name": "next-item",
+      "source": "./plugins/next-item",
+      "description": "Does the next item of a repository's implementation plan by following the \"Doing the next item\" section of its AGENTS.md."
+    }
+  ]
 }

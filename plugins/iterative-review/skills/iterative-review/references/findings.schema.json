@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Review findings",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "findings"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "Two to four sentences: what was reviewed and the overall verdict."
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "category", "path", "line", "title", "body"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "category": {
+            "type": "string",
+            "description": "One kebab-case word or two, such as correctness, security, error-handling, spec-violation, test-gap, performance, maintainability."
+          },
+          "path": {
+            "type": "string",
+            "description": "Repository-relative path of the file the finding is in."
+          },
+          "line": {
+            "type": "integer",
+            "description": "1-based line number in the reviewed (new) version of the file. Prefer a line inside a changed hunk."
+          },
+          "title": {
+            "type": "string",
+            "description": "One line, at most 80 characters: the defect, not the fix."
+          },
+          "body": {
+            "type": "string",
+            "description": "The evidence (cite the code), a concrete failure scenario, and a suggested fix. Markdown."
+          }
+        }
+      }
+    }
+  }
+}

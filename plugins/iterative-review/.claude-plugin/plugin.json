@@ -1,0 +1,8 @@
+{
+  "name": "iterative-review",
+  "version": "0.1.0",
+  "description": "Runs a review-and-fix loop on a pull request: Codex and a fresh Claude reviewer review in parallel, a Claude fix agent addresses the findings, Codex reviews the fixes, and Claude fixes again. Needs gh; the Codex CLI is optional.",
+  "author": {
+    "name": "Nathan Slaughter"
+  }
+}
