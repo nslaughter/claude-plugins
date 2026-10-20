@@ -32,7 +32,12 @@ kept, and the update makes it active with only the rules chosen.
 Other rulesets and classic branch protection are never touched. With
 --dry-run it prints the calls it would make and changes nothing. Otherwise
 it prints a report: each setting before and after, and whether the
-read-back matches what was asked.
+read-back matches what was asked. For the ruleset, every value saved is
+compared: its rules and their parameters, its branch condition, its
+enforcement and its bypass list, with each bypass role and mode as GitHub's
+GraphQL API names them. `ruleset.mismatches` says what reads back
+differently. Once the ruleset is saved the report names it, even if
+reading it back fails.
 
 Needs only Python 3 and an authenticated `gh` with admin access to the repository.
 """
@@ -206,6 +211,48 @@ def bypass_roles(node_id):
     ]
 
 
+def matches(wanted, got):
+    """Whether `got` holds every value in `wanted`; GitHub may add fields of its own."""
+    if isinstance(wanted, dict):
+        return isinstance(got, dict) and all(key in got and matches(value, got[key]) for key, value in wanted.items())
+    if isinstance(wanted, list):
+        return (
+            isinstance(got, list)
+            and len(got) == len(wanted)
+            and all(any(matches(item, other) for other in got) for item in wanted)
+        )
+    return wanted == got
+
+
+def mismatches(body, back, roles):
+    """What reads back differently from the ruleset saved, in words; empty when nothing does."""
+    found = []
+    if back.get("enforcement") != body["enforcement"]:
+        found.append(f"its enforcement is {back.get('enforcement')}, not {body['enforcement']}")
+    if not matches(body["conditions"], back.get("conditions")):
+        found.append(f"it targets {json.dumps(back.get('conditions'))}, not only the default branch")
+    got = {rule.get("type"): rule for rule in back.get("rules") or []}
+    for rule in body["rules"]:
+        if rule["type"] not in got:
+            found.append(f"its {rule['type']} rule is missing")
+            continue
+        read = got[rule["type"]].get("parameters") or {}
+        for key, value in (rule.get("parameters") or {}).items():
+            if not matches(value, read.get(key)):
+                found.append(f"its {rule['type']} rule's {key} is {json.dumps(read.get(key))}, not {json.dumps(value)}")
+    for kind in sorted(set(got) - {rule["type"] for rule in body["rules"]}):
+        found.append(f"it has a {kind} rule that wasn't asked for")
+    if not matches(body["bypass_actors"], back.get("bypass_actors") or []):
+        found.append(f"its bypass list is {json.dumps(back.get('bypass_actors'))}, not {json.dumps(body['bypass_actors'])}")
+    # Every bypass this skill grants is to the admin role; GitHub's names for it confirm the role ID.
+    wanted_roles = sorted(("admin", actor["bypass_mode"].upper()) for actor in body["bypass_actors"])
+    got_roles = sorted(((role["role"] or "").lower(), (role["mode"] or "").upper()) for role in roles)
+    if got_roles != wanted_roles:
+        wanted_named = [{"role": role, "mode": mode} for role, mode in wanted_roles]
+        found.append(f"GitHub names its bypass {json.dumps(roles)}, not {json.dumps(wanted_named)}")
+    return found
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--plan", required=True)
@@ -259,6 +306,7 @@ def main():
             )
 
     if body is not None:
+        saved = None
         try:
             if existing:
                 saved = gh_api("PUT", f"repos/{repo}/rulesets/{existing['id']}", body=body)
@@ -266,23 +314,31 @@ def main():
             else:
                 saved = gh_api("POST", f"repos/{repo}/rulesets", body=body)
                 action = "created"
-            back = gh_api("GET", f"repos/{repo}/rulesets/{saved['id']}")
-            got = sorted(r["type"] for r in back.get("rules", []))
-            wanted = sorted(r["type"] for r in body["rules"])
-            roles = bypass_roles(back.get("node_id"))
+        except RuntimeError as error:
+            report["errors"].append(str(error))
+        if saved is not None:
+            # Saved: the report names the ruleset even if reading it back fails.
             report["ruleset"] = {
                 "id": saved["id"],
                 "url": f"https://github.com/{repo}/rules/{saved['id']}",
                 "action": action,
-                "rules": got,
-                "bypass": roles,
-                "ok": got == wanted
-                and back.get("enforcement") == "active"
-                and len(roles) == len(body["bypass_actors"])
-                and all((r["role"] or "").lower() == "admin" for r in roles),
+                "rules": None,
+                "bypass": None,
+                "mismatches": ["it couldn't be read back"],
+                "ok": False,
             }
-        except RuntimeError as error:
-            report["errors"].append(str(error))
+            try:
+                back = gh_api("GET", f"repos/{repo}/rulesets/{saved['id']}")
+                roles = bypass_roles(back.get("node_id"))
+                found = mismatches(body, back, roles)
+                report["ruleset"].update(
+                    rules=sorted(r["type"] for r in back.get("rules") or []),
+                    bypass=roles,
+                    mismatches=found,
+                    ok=not found,
+                )
+            except RuntimeError as error:
+                report["errors"].append(str(error))
 
     json.dump(report, sys.stdout, indent=2)
     print()

@@ -109,5 +109,63 @@ class LaterRunTest(ApplyTest):
         self.assertEqual(call["body"]["enforcement"], "active")
 
 
+class ReadBackTest(ApplyTest):
+    def test_a_ruleset_that_reads_back_as_asked_is_ok(self):
+        code, out = self.apply_plan(FULL_RULESET)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out["ruleset"]["action"], "created")
+        self.assertTrue(out["ruleset"]["ok"])
+        self.assertEqual(out["ruleset"]["mismatches"], [])
+
+    def assert_reads_back_differently(self, change):
+        self.github.after_save = change
+        code, out = self.apply_plan(FULL_RULESET)
+        self.assertEqual(code, 1, out)
+        self.assertFalse(out["ruleset"]["ok"])
+        self.assertTrue(out["ruleset"]["mismatches"])
+        return out["ruleset"]["mismatches"]
+
+    def test_a_bypass_mode_that_reads_back_differently_fails(self):
+        def always(ruleset):
+            ruleset["bypass_actors"][0]["bypass_mode"] = "always"
+
+        mismatches = self.assert_reads_back_differently(always)
+        self.assertTrue(any("bypass" in mismatch for mismatch in mismatches), mismatches)
+
+    def test_approvals_that_read_back_differently_fail(self):
+        def two(ruleset):
+            ruleset["rules"][0]["parameters"]["required_approving_review_count"] = 2
+
+        self.assert_reads_back_differently(two)
+
+    def test_thread_resolution_that_reads_back_differently_fails(self):
+        def unresolved(ruleset):
+            ruleset["rules"][0]["parameters"]["required_review_thread_resolution"] = False
+
+        self.assert_reads_back_differently(unresolved)
+
+    def test_checks_that_read_back_differently_fail(self):
+        def other(ruleset):
+            ruleset["rules"][1]["parameters"]["required_status_checks"] = [{"context": "lint"}]
+
+        self.assert_reads_back_differently(other)
+
+    def test_a_branch_condition_that_reads_back_differently_fails(self):
+        def every_branch(ruleset):
+            ruleset["conditions"]["ref_name"]["include"] = ["~ALL"]
+
+        self.assert_reads_back_differently(every_branch)
+
+    def test_names_the_saved_ruleset_when_reading_it_back_fails(self):
+        self.github.failing.add(("GET", f"repos/octo/widgets/rulesets/{self.github.next_id}"))
+        code, out = self.apply_plan(FULL_RULESET)
+        self.assertEqual(code, 1, out)
+        self.assertTrue(out["errors"], out)
+        self.assertIsNotNone(out["ruleset"], out)
+        self.assertEqual(out["ruleset"]["id"], self.github.next_id - 1)
+        self.assertEqual(out["ruleset"]["action"], "created")
+        self.assertFalse(out["ruleset"]["ok"])
+
+
 if __name__ == "__main__":
     unittest.main()

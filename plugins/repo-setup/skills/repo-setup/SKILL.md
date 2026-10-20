@@ -104,14 +104,18 @@ python3 -I ${CLAUDE_SKILL_DIR}/scripts/apply.py --plan <plan file>
 It creates the ruleset "repo-setup: default branch", or updates it in place on a later run,
 keeping the rules and parameters the plan doesn't choose. A ruleset that isn't active enforces
 nothing, so it keeps none of its rules and becomes active with only the rules chosen. It
-prints a report and exits 1 if any change failed or reads back differently. `--dry-run` prints
-the calls instead; use it when the user asks what would change.
+prints a report and exits 1 if any change failed or reads back differently: for the ruleset,
+every value it saved is compared, down to each rule's parameters and the bypass mode.
+`--dry-run` prints the calls instead; use it when the user asks what would change.
 
 ## 4. Report
 
 - A table of each setting: before, after, and whether it reads back as asked.
 - The ruleset's link (`ruleset.url`), its rules, and its bypass as GitHub names it
-  (`ruleset.bypass`, for example the role `admin`, pull requests only).
+  (`ruleset.bypass`, for example the role `admin`, pull requests only). When `ruleset.ok` is
+  false, each of `ruleset.mismatches`, word for word. A ruleset that was saved but couldn't be
+  read back still has its link and `ruleset.action`: say it was created or updated, and that
+  it needs checking on GitHub.
 - What wasn't available, and why.
 - Other rulesets and branch protection left as they were.
 - With approvals above 0 and an admin bypass: merging one's own pull request takes the bypass,
