@@ -96,5 +96,30 @@ class DefaultBranchTest(DetectTest):
         self.assertEqual(options["bypass"]["current"], "admins_pull_request")
 
 
+class CheckDiscoveryTest(DetectTest):
+    def test_offers_the_checks_of_the_pull_request_merged_last(self):
+        # #5 merged first, but a later comment makes it the most recently updated.
+        self.github.add_pull(5, merged_at="2026-01-01T00:00:00Z", updated_at="2026-03-01T00:00:00Z", checks=["retired"])
+        self.github.add_pull(7, merged_at="2026-02-01T00:00:00Z", updated_at="2026-02-01T00:00:00Z", checks=["test"])
+        out = self.detect_json()
+        self.assertEqual(out["checks"], ["test"])
+        self.assertIn("#7", out["checks_source"])
+
+    def test_finds_a_merged_pull_request_behind_many_closed_ones(self):
+        for number in range(100, 220):
+            self.github.add_pull(number, updated_at=f"2026-05-01T00:{number % 60:02d}:00Z")
+        self.github.add_pull(3, merged_at="2026-01-01T00:00:00Z", updated_at="2026-01-01T00:00:00Z", checks=["test"])
+        out = self.detect_json()
+        self.assertEqual(out["checks"], ["test"])
+        self.assertIn("#3", out["checks_source"])
+
+    def test_falls_back_to_the_default_branch_without_a_merged_pull_request(self):
+        self.github.add_pull(4, updated_at="2026-01-01T00:00:00Z")
+        self.github.checks["main"] = ["build"]
+        out = self.detect_json()
+        self.assertEqual(out["checks"], ["build"])
+        self.assertEqual(out["checks_source"], "main's latest commit")
+
+
 if __name__ == "__main__":
     unittest.main()

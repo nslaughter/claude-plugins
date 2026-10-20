@@ -101,17 +101,40 @@ def bypass_of(ruleset):
     return "admins_always" if admin.get("bypass_mode") == "always" else "admins_pull_request"
 
 
+def latest_merged(repo, branch):
+    """The pull request merged into `branch` most recently, or None when none was.
+
+    The API can't sort by merge time, so closed pull requests come newest
+    update first. A pull request is never updated before it merges, so once
+    the latest merge found is no earlier than a page's oldest update, no later
+    page can hold a later one.
+    """
+    latest, page = None, 1
+    while True:
+        ok, pulls = api(
+            f"repos/{repo}/pulls?state=closed&base={branch}&sort=updated&direction=desc"
+            f"&per_page={PER_PAGE}&page={page}"
+        )
+        if not ok or not pulls:
+            return latest
+        for pull in pulls:
+            if pull.get("merged_at") and (latest is None or pull["merged_at"] > latest["merged_at"]):
+                latest = pull
+        if len(pulls) < PER_PAGE or (latest is not None and latest["merged_at"] >= pulls[-1]["updated_at"]):
+            return latest
+        page += 1
+
+
 def check_names(repo, branch):
     """The checks that ran on the latest merged pull request, and where they came from.
 
     Only a check that runs on pull requests can be required: one that runs
     only on pushes or on a schedule would never report, and every merge would
-    wait for it. Without a merged pull request, the default branch's latest
-    commit stands in.
+    wait for it. Only when no pull request has merged does the default
+    branch's latest commit stand in.
     """
     ref, source = branch, f"{branch}'s latest commit"
-    ok, pulls = api(f"repos/{repo}/pulls?state=closed&base={branch}&sort=updated&direction=desc&per_page=20")
-    merged = next((p for p in pulls or [] if p.get("merged_at")), None) if ok else None
+    merged = latest_merged(repo, branch)
     if merged is not None:
         ref, source = merged["head"]["sha"], f"pull request #{merged['number']}, the latest merged"
     names = set()
