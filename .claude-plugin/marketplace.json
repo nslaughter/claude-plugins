@@ -1,0 +1,10 @@
+{
+  "name": "nslaughter",
+  "owner": {
+    "name": "Nathan Slaughter"
+  },
+  "metadata": {
+    "description": "The owner's Claude Code plugins: skills, hooks, and commands."
+  },
+  "plugins": []
+}
