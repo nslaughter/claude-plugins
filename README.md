@@ -13,6 +13,7 @@ The owner's Claude Code plugin marketplace, named `nslaughter`. The plugins cove
 
 - **iterative-review**: a review-and-fix loop on a pull request. Codex and a fresh Claude reviewer review in parallel, a Claude fix agent addresses the findings, Codex reviews the fixes, and Claude fixes again. Needs `gh`; the Codex CLI is optional.
 - **next-item**: does the next item of a repository's implementation plan by following the "Doing the next item" section of its `AGENTS.md`.
+- **repo-setup**: sets up a GitHub repository's merge settings (squash only, with the pull request's title and description as the commit) and a ruleset on its default branch (pull requests, checks, resolved threads, no force pushes, approvals with an optional admin bypass). It offers only what the repository's plan and your access allow. Needs `gh` and Python 3.
 
 ## Layout
 
