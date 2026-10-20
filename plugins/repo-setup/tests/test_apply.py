@@ -79,5 +79,35 @@ class LookupTest(ApplyTest):
         self.assertEqual(out["ruleset"]["bypass"], [{"role": "admin", "mode": "PULL_REQUEST"}])
 
 
+class LaterRunTest(ApplyTest):
+    def test_keeps_the_rules_left_unticked(self):
+        ours = self.github.add_ruleset(
+            RULESET_NAME,
+            rules=[pull_request_rule(approvals=1), checks_rule("test")],
+            bypass_actors=ADMINS_PULL_REQUEST,
+        )
+        call = self.planned_ruleset_call({"block_force_push_and_deletion": True, "bypass": "admins_pull_request"})
+        self.assertEqual(call["method"], "PUT")
+        self.assertTrue(call["path"].endswith(f"/rulesets/{ours}"))
+        rules = {rule["type"]: rule for rule in call["body"]["rules"]}
+        self.assertEqual(set(rules), {"pull_request", "required_status_checks", "non_fast_forward", "deletion"})
+        self.assertEqual(rules["pull_request"]["parameters"]["required_approving_review_count"], 1)
+        self.assertEqual(rules["required_status_checks"], checks_rule("test"))
+
+    def test_keeps_thread_resolution_left_unticked(self):
+        self.github.add_ruleset(RULESET_NAME, rules=[pull_request_rule(resolve_threads=True)])
+        call = self.planned_ruleset_call({"require_pull_request": True, "approvals": 1, "bypass": "none"})
+        (pull,) = [rule for rule in call["body"]["rules"] if rule["type"] == "pull_request"]
+        self.assertTrue(pull["parameters"]["required_review_thread_resolution"])
+        self.assertEqual(pull["parameters"]["required_approving_review_count"], 1)
+
+    def test_does_not_carry_over_the_rules_of_a_disabled_ruleset(self):
+        self.github.add_ruleset(RULESET_NAME, enforcement="disabled", rules=[pull_request_rule(), checks_rule("test")])
+        call = self.planned_ruleset_call({"block_force_push_and_deletion": True, "bypass": "none"})
+        self.assertEqual(call["method"], "PUT")
+        self.assertEqual(call["body"]["rules"], FORCE_PUSH_AND_DELETION)
+        self.assertEqual(call["body"]["enforcement"], "active")
+
+
 if __name__ == "__main__":
     unittest.main()

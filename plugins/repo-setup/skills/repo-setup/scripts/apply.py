@@ -22,20 +22,29 @@ The plan names only what was chosen; nothing else is changed:
 "ruleset" is null when no ruleset rule was chosen.
 
 The ruleset is named "repo-setup: default branch" and targets the default
-branch; a later run updates it in place. Other rulesets and classic branch
-protection are never touched. With --dry-run it prints the calls it would
-make and changes nothing. Otherwise it prints a report: each setting before
-and after, and whether the read-back matches what was asked.
+branch; a later run updates it in place. An update keeps every rule and
+parameter the plan doesn't choose, so a rule left unticked stays as it is:
+the plan adds rules and sets the parameters it names, and never removes a
+rule or turns off thread resolution. "checks" replaces the list of required
+checks. A ruleset that isn't active enforces nothing, so its rules aren't
+kept, and the update makes it active with only the rules chosen.
+
+Other rulesets and classic branch protection are never touched. With
+--dry-run it prints the calls it would make and changes nothing. Otherwise
+it prints a report: each setting before and after, and whether the
+read-back matches what was asked.
 
 Needs only Python 3 and an authenticated `gh` with admin access to the repository.
 """
 
 import argparse
+import copy
 import json
 import subprocess
 import sys
 
 RULESET_NAME = "repo-setup: default branch"
+RULE_CHOICES = ("require_pull_request", "checks", "block_force_push_and_deletion")
 ADMIN_ROLE = 5  # The built-in repository admin role, as rulesets name it.
 PER_PAGE = 100
 
@@ -91,44 +100,64 @@ def gh_pages(path):
 
 
 def find_ruleset(repo):
-    """The ID of the ruleset this skill made, or None.
+    """The ruleset this skill made, as GitHub returns it, or None.
 
     GitHub matches owner and repository names in any case, so the plan's
     spelling of the name may differ from the `source` GitHub reports.
     """
     for summary in gh_pages(f"repos/{repo}/rulesets"):
         if summary.get("name") == RULESET_NAME and (summary.get("source") or "").lower() == repo.lower():
-            return summary["id"]
+            return gh_api("GET", f"repos/{repo}/rulesets/{summary['id']}")
     return None
 
 
-def ruleset_body(plan):
-    rules = []
+def ruleset_body(plan, existing=None):
+    """The ruleset to save: the plan's choices on top of the rules `existing` enforces.
+
+    `existing` is this skill's ruleset from an earlier run, or None. When it
+    is active, its rules and parameters the plan doesn't choose are kept, so
+    a later run never drops a protection the user left unticked.
+    """
+    kept = (existing or {}).get("rules") if (existing or {}).get("enforcement") == "active" else None
+    rules = [
+        {key: copy.deepcopy(value) for key, value in old.items() if key in ("type", "parameters")}
+        for old in kept or []
+    ]
+
+    def rule(kind, parameters=None):
+        found = next((r for r in rules if r.get("type") == kind), None)
+        if found is None:
+            found = {"type": kind}
+            if parameters is not None:
+                found["parameters"] = parameters
+            rules.append(found)
+        return found
+
     if plan.get("require_pull_request"):
-        rules.append(
+        parameters = rule(
+            "pull_request",
             {
-                "type": "pull_request",
-                "parameters": {
-                    "required_approving_review_count": int(plan.get("approvals") or 0),
-                    "dismiss_stale_reviews_on_push": False,
-                    "require_code_owner_review": False,
-                    "require_last_push_approval": False,
-                    "required_review_thread_resolution": bool(plan.get("resolve_threads")),
-                },
-            }
-        )
+                "required_approving_review_count": 0,
+                "dismiss_stale_reviews_on_push": False,
+                "require_code_owner_review": False,
+                "require_last_push_approval": False,
+                "required_review_thread_resolution": False,
+            },
+        ).setdefault("parameters", {})
+        parameters["required_approving_review_count"] = int(plan.get("approvals") or 0)
+        if plan.get("resolve_threads"):
+            parameters["required_review_thread_resolution"] = True
     if plan.get("checks"):
-        rules.append(
-            {
-                "type": "required_status_checks",
-                "parameters": {
-                    "strict_required_status_checks_policy": False,
-                    "required_status_checks": [{"context": name} for name in plan["checks"]],
-                },
-            }
-        )
+        parameters = rule(
+            "required_status_checks",
+            {"strict_required_status_checks_policy": False, "required_status_checks": []},
+        ).setdefault("parameters", {})
+        # A check already required keeps its other fields, such as the app it must come from.
+        old = {c.get("context"): c for c in parameters.get("required_status_checks") or []}
+        parameters["required_status_checks"] = [old.get(name, {"context": name}) for name in plan["checks"]]
     if plan.get("block_force_push_and_deletion"):
-        rules += [{"type": "non_fast_forward"}, {"type": "deletion"}]
+        rule("non_fast_forward")
+        rule("deletion")
     return {
         "name": RULESET_NAME,
         "target": "branch",
@@ -193,10 +222,11 @@ def main():
     patch = {}
     for name in plan.get("merge") or []:
         patch.update(MERGE_SETTINGS[name])
-    body = ruleset_body(plan["ruleset"]) if plan.get("ruleset") else None
-    if body is not None and not body["rules"]:
-        body = None  # A ruleset with no rules does nothing; none is made.
-    existing = find_ruleset(repo) if body is not None else None
+    chosen = plan.get("ruleset") or {}
+    body, existing = None, None
+    if any(chosen.get(key) for key in RULE_CHOICES):  # With no rule chosen, no ruleset is made or changed.
+        existing = find_ruleset(repo)
+        body = ruleset_body(chosen, existing)
 
     if args.dry_run:
         calls = []
@@ -206,7 +236,7 @@ def main():
             calls.append(
                 {
                     "method": "PUT" if existing else "POST",
-                    "path": f"repos/{repo}/rulesets/{existing}" if existing else f"repos/{repo}/rulesets",
+                    "path": f"repos/{repo}/rulesets/{existing['id']}" if existing else f"repos/{repo}/rulesets",
                     "body": body,
                 }
             )
@@ -231,7 +261,7 @@ def main():
     if body is not None:
         try:
             if existing:
-                saved = gh_api("PUT", f"repos/{repo}/rulesets/{existing}", body=body)
+                saved = gh_api("PUT", f"repos/{repo}/rulesets/{existing['id']}", body=body)
                 action = "updated"
             else:
                 saved = gh_api("POST", f"repos/{repo}/rulesets", body=body)

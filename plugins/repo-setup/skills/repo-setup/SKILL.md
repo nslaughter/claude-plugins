@@ -69,6 +69,13 @@ Multi-select questions start with nothing ticked, so say in the first question t
 without `require_pull_request`, say so and ask whether to add it. Questions 3 and 4 matter only
 with a ruleset; skip them when no rule from question 2 is chosen.
 
+When `rulesets.ours` is set, its rules are in force, and the user ticks only some of them,
+say that a rule left unticked stays as it is: a later run adds rules and sets what the plan
+names, but never removes a rule or turns off thread resolution. To drop one, the user edits
+the ruleset on GitHub. The chosen checks do replace the required ones: when
+`required_checks.current` names a check the choice leaves out, say it will no longer be
+required.
+
 ## 3. Apply
 
 Write the plan to a file in the scratchpad (or `mktemp -d`), using only what was chosen:
@@ -94,7 +101,9 @@ Write the plan to a file in the scratchpad (or `mktemp -d`), using only what was
 python3 -I ${CLAUDE_SKILL_DIR}/scripts/apply.py --plan <plan file>
 ```
 
-It creates the ruleset "repo-setup: default branch", or updates it in place on a later run. It
+It creates the ruleset "repo-setup: default branch", or updates it in place on a later run,
+keeping the rules and parameters the plan doesn't choose. A ruleset that isn't active enforces
+nothing, so it keeps none of its rules and becomes active with only the rules chosen. It
 prints a report and exits 1 if any change failed or reads back differently. `--dry-run` prints
 the calls instead; use it when the user asks what would change.
 
