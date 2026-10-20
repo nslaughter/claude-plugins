@@ -37,6 +37,7 @@ import sys
 
 RULESET_NAME = "repo-setup: default branch"
 ADMIN_ROLE = 5  # The built-in repository admin role, as rulesets name it.
+PER_PAGE = 100
 
 MERGE_SETTINGS = {
     "squash_only": {"allow_squash_merge": True, "allow_merge_commit": False, "allow_rebase_merge": False},
@@ -78,9 +79,25 @@ def gh_api(method, path, body=None, fields=()):
     return json.loads(run.stdout) if run.stdout.strip() else None
 
 
+def gh_pages(path):
+    """Every item of a list the API pages."""
+    items, page = [], 1
+    while True:
+        data = gh_api("GET", f"{path}?per_page={PER_PAGE}&page={page}") or []
+        items += data
+        if len(data) < PER_PAGE:
+            return items
+        page += 1
+
+
 def find_ruleset(repo):
-    for summary in gh_api("GET", f"repos/{repo}/rulesets") or []:
-        if summary.get("name") == RULESET_NAME and summary.get("source") == repo:
+    """The ID of the ruleset this skill made, or None.
+
+    GitHub matches owner and repository names in any case, so the plan's
+    spelling of the name may differ from the `source` GitHub reports.
+    """
+    for summary in gh_pages(f"repos/{repo}/rulesets"):
+        if summary.get("name") == RULESET_NAME and (summary.get("source") or "").lower() == repo.lower():
             return summary["id"]
     return None
 
@@ -142,23 +159,22 @@ def check_plan(plan):
     return problems
 
 
-def bypass_roles(repo, ruleset_id):
-    """The role names GitHub reports for the ruleset's bypass list, so the role ID is confirmed."""
-    owner, name = repo.split("/", 1)
-    query = """query($owner: String!, $name: String!) {
-      repository(owner: $owner, name: $name) {
-        rulesets(first: 50) { nodes { databaseId bypassActors(first: 20) {
-          nodes { bypassMode repositoryRoleName } } } }
-      }
+def bypass_roles(node_id):
+    """The role names GitHub reports for the ruleset's bypass list, so the role ID is confirmed.
+
+    The ruleset is looked up by its node ID, so it's found however many
+    rulesets the repository has.
+    """
+    query = """query($id: ID!) {
+      node(id: $id) { ... on RepositoryRuleset { bypassActors(first: 100) {
+        nodes { bypassMode repositoryRoleName } } } }
     }"""
-    data = gh_api("POST", "graphql", fields=["-f", f"query={query}", "-f", f"owner={owner}", "-f", f"name={name}"])
-    for node in data["data"]["repository"]["rulesets"]["nodes"]:
-        if node["databaseId"] == ruleset_id:
-            return [
-                {"role": actor.get("repositoryRoleName"), "mode": actor.get("bypassMode")}
-                for actor in node["bypassActors"]["nodes"]
-            ]
-    return []
+    data = gh_api("POST", "graphql", fields=["-f", f"query={query}", "-f", f"id={node_id}"])
+    node = ((data or {}).get("data") or {}).get("node") or {}
+    return [
+        {"role": actor.get("repositoryRoleName"), "mode": actor.get("bypassMode")}
+        for actor in (node.get("bypassActors") or {}).get("nodes", [])
+    ]
 
 
 def main():
@@ -223,7 +239,7 @@ def main():
             back = gh_api("GET", f"repos/{repo}/rulesets/{saved['id']}")
             got = sorted(r["type"] for r in back.get("rules", []))
             wanted = sorted(r["type"] for r in body["rules"])
-            roles = bypass_roles(repo, saved["id"])
+            roles = bypass_roles(back.get("node_id"))
             report["ruleset"] = {
                 "id": saved["id"],
                 "url": f"https://github.com/{repo}/rules/{saved['id']}",

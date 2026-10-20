@@ -4,11 +4,12 @@
 Usage:
   detect.py [owner/name]    (defaults to the current directory's repository)
 
-Prints one JSON object: the repository, who holds its admin role, and `options`,
-one entry per setting with whether it is available here (and the API's own
-reason when it isn't), its current state, and its default. Availability is
-found by asking the API, not by reading the plan name, so an organization's
-plan, a repository's visibility and the caller's access all count.
+Prints one JSON object: the repository, by the name GitHub gives it, who holds
+its admin role, and `options`, one entry per setting with whether it is
+available here (and the API's own reason when it isn't), its current state,
+and its default. Availability is found by asking the API, not by reading the
+plan name, so an organization's plan, a repository's visibility and the
+caller's access all count.
 
 Needs only Python 3 and an authenticated `gh`. Reads only; changes nothing.
 """
@@ -18,6 +19,7 @@ import subprocess
 import sys
 
 RULESET_NAME = "repo-setup: default branch"
+PER_PAGE = 100
 MERGE_KEYS = [
     "allow_squash_merge",
     "allow_merge_commit",
@@ -43,6 +45,19 @@ def api(path):
     except (ValueError, AttributeError):
         message = None
     return False, message or first_line(run.stderr) or first_line(run.stdout) or "the request failed"
+
+
+def api_pages(path):
+    """Every item of a list the API pages: (True, items), or (False, the API's message)."""
+    items, page = [], 1
+    while True:
+        ok, data = api(f"{path}{'&' if '?' in path else '?'}per_page={PER_PAGE}&page={page}")
+        if not ok:
+            return False, data
+        items += data or []
+        if len(data or []) < PER_PAGE:
+            return True, items
+        page += 1
 
 
 def need(path):
@@ -123,15 +138,15 @@ def option(id, group, label, *, available, reason, current, default, description
 
 
 def main():
-    repo = sys.argv[1] if len(sys.argv) > 1 else current_repo()
-    info = need(f"repos/{repo}")
+    info = need(f"repos/{sys.argv[1] if len(sys.argv) > 1 else current_repo()}")
+    repo = info["full_name"]  # GitHub's spelling: it matches owner and name in any case.
     viewer = need("user")["login"]
     branch = info["default_branch"]
     is_admin = bool((info.get("permissions") or {}).get("admin"))
     merge = {key: info.get(key) for key in MERGE_KEYS}
 
     # Rulesets: whether this repository may have them is the API's answer.
-    rulesets_ok, listed = api(f"repos/{repo}/rulesets")
+    rulesets_ok, listed = api_pages(f"repos/{repo}/rulesets")
     existing, ours = [], None
     if rulesets_ok:
         for summary in listed or []:
@@ -146,7 +161,7 @@ def main():
                 "targets_default_branch": targets_default_branch(ruleset),
             }
             existing.append(entry)
-            if ruleset["name"] == RULESET_NAME and ruleset.get("source") == repo:
+            if ruleset["name"] == RULESET_NAME and (ruleset.get("source") or "").lower() == repo.lower():
                 ours = ruleset
 
     ok, protection = api(f"repos/{repo}/branches/{branch}/protection")
