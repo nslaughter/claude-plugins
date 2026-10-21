@@ -131,6 +131,21 @@ class LaterRunTest(ApplyTest):
         self.assertEqual(call["body"]["rules"], FORCE_PUSH_AND_DELETION)
         self.assertEqual(call["body"]["enforcement"], "active")
 
+    def test_does_not_carry_over_the_rules_of_a_ruleset_moved_off_the_default_branch(self):
+        # Active, but its conditions were changed on GitHub to name another branch.
+        self.github.add_ruleset(
+            RULESET_NAME,
+            applies=False,
+            conditions={"ref_name": {"include": ["refs/heads/release"], "exclude": []}},
+            rules=[pull_request_rule(approvals=2)],
+            bypass_actors=ADMINS_PULL_REQUEST,
+        )
+        call = self.planned_ruleset_call({"block_force_push_and_deletion": True})
+        self.assertEqual(call["method"], "PUT")
+        self.assertEqual(call["body"]["rules"], FORCE_PUSH_AND_DELETION)
+        self.assertEqual(call["body"]["bypass_actors"], [])
+        self.assertEqual(call["body"]["conditions"]["ref_name"]["include"], ["~DEFAULT_BRANCH"])
+
 
 class ReadBackTest(ApplyTest):
     def test_a_ruleset_that_reads_back_as_asked_is_ok(self):

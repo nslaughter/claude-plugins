@@ -30,9 +30,12 @@ the plan adds rules and sets the parameters it names, and never removes a
 rule or turns off thread resolution. "checks" replaces the list of required
 checks. A plan without "approvals" keeps the pull request rule's count (0
 on a new rule), and one without "bypass" keeps the bypass list (nobody on
-a new ruleset). A ruleset that isn't active enforces nothing, so its rules
-and bypass list aren't kept, and the update makes it active with only the
-rules chosen.
+a new ruleset). A ruleset that GitHub doesn't enforce on the default
+branch, because it isn't active or its conditions were changed to other
+branches, enforces nothing there, so its rules and bypass list aren't kept,
+and the update makes it active on the default branch with only the rules
+chosen. Whether GitHub enforces it there is GitHub's own answer, from its
+branch-rules endpoint, as in detect.py.
 
 Other rulesets and classic branch protection are never touched. With
 --dry-run it prints the calls it would make and changes nothing. Otherwise
@@ -123,15 +126,26 @@ def find_ruleset(repo):
     return None
 
 
-def ruleset_body(plan, existing=None):
-    """The ruleset to save: the plan's choices on top of the rules `existing` enforces.
+def enforced_on_default_branch(repo, ruleset):
+    """Whether GitHub enforces `ruleset` on the repository's default branch.
 
-    `existing` is this skill's ruleset from an earlier run, or None. When it
-    is active, its rules and parameters the plan doesn't choose are kept, so
-    a later run never drops a protection the user left unticked, and so is
-    its bypass list when the plan names no bypass.
+    This is detect.py's test: GitHub's branch-rules endpoint lists the rules
+    of every active ruleset whose conditions match the branch.
     """
-    kept = existing if (existing or {}).get("enforcement") == "active" else {}
+    branch = gh_api("GET", f"repos/{repo}")["default_branch"]
+    return any(rule.get("ruleset_id") == ruleset["id"] for rule in gh_pages(f"repos/{repo}/rules/branches/{branch}"))
+
+
+def ruleset_body(plan, enforced=None):
+    """The ruleset to save: the plan's choices on top of the rules `enforced` holds.
+
+    `enforced` is this skill's ruleset from an earlier run when GitHub
+    enforces it on the default branch, or None. Its rules and parameters the
+    plan doesn't choose are kept, so a later run never drops a protection the
+    user left unticked, and so is its bypass list when the plan names no
+    bypass.
+    """
+    kept = enforced or {}
     rules = [
         {key: copy.deepcopy(value) for key, value in old.items() if key in ("type", "parameters")}
         for old in kept.get("rules") or []
@@ -300,7 +314,9 @@ def main():
     body, existing = None, None
     if any(chosen.get(key) for key in RULE_CHOICES):  # With no rule chosen, no ruleset is made or changed.
         existing = find_ruleset(repo)
-        body = ruleset_body(chosen, existing)
+        # Rules that aren't in force, as detect.py reported them, start over rather than carry on.
+        in_force = existing is not None and enforced_on_default_branch(repo, existing)
+        body = ruleset_body(chosen, existing if in_force else None)
 
     if args.dry_run:
         calls = []

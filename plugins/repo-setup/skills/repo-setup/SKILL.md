@@ -40,7 +40,8 @@ on GitHub Free a private repository's rulesets call refuses, and the reason says
   and its conditions match the default branch.
 - If `rulesets.ours` names this skill's ruleset but its entry's `targets_default_branch` is
   false, say so, with its `enforcement` when that isn't `active`: none of its rules is in
-  force, so `current` counts them as not set.
+  force, so `current` counts them as not set, and applying starts it over with only the rules
+  chosen.
 
 ## 2. Ask
 
@@ -110,8 +111,10 @@ python3 -I ${CLAUDE_SKILL_DIR}/scripts/apply.py --plan <plan file>
 ```
 
 It creates the ruleset "repo-setup: default branch", or updates it in place on a later run,
-keeping the rules and parameters the plan doesn't choose. A ruleset that isn't active enforces
-nothing, so it keeps none of its rules and becomes active with only the rules chosen. It
+keeping the rules and parameters the plan doesn't choose. A ruleset that GitHub doesn't enforce
+on the default branch (`targets_default_branch` false: it isn't active, or its conditions were
+changed to other branches) keeps none of its rules or bypass list, and becomes active on the
+default branch with only the rules chosen. It
 prints a report and exits 1 if any change failed or reads back differently: for the ruleset,
 every value it saved is compared, from its name and target down to each rule's parameters
 and the bypass mode.
