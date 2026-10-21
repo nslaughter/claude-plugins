@@ -30,6 +30,10 @@ on GitHub Free a private repository's rulesets call refuses, and the reason says
   current settings from `merge`.
 - If `rulesets.available` is false, only the merge settings can be applied. Say why, in the
   API's words, and that a public repository, or a paid plan, would allow the rest.
+- `checks` are the checks that ran on the pull request merged last, or on the default branch's
+  latest commit when none has merged (`checks_source` says which). If GitHub refused a request
+  while finding them, `checks` is empty and `required_checks` isn't available: say so, with its
+  `reason`. The default branch's checks never stand in for checks that couldn't be read.
 - Mention any other ruleset in `rulesets.existing` whose `targets_default_branch` is true, and
   `classic_protection` when true: this skill leaves both as they are, and their rules apply
   alongside its own. `targets_default_branch` is GitHub's own answer: the ruleset is enforced

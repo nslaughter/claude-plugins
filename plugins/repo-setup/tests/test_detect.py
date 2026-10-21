@@ -120,6 +120,27 @@ class CheckDiscoveryTest(DetectTest):
         self.assertEqual(out["checks"], ["build"])
         self.assertEqual(out["checks_source"], "main's latest commit")
 
+    def test_offers_no_checks_when_the_pull_requests_cannot_be_listed(self):
+        self.github.add_pull(7, merged_at="2026-02-01T00:00:00Z", updated_at="2026-02-01T00:00:00Z", checks=["test"])
+        self.github.checks["main"] = ["scheduled-maintenance"]
+        self.github.failing.add(("GET", "repos/octo/widgets/pulls"))
+        out = self.detect_json()
+        self.assertEqual(out["checks"], [])
+        required = self.options(out)["required_checks"]
+        self.assertFalse(required["available"])
+        self.assertIn("Server Error", required["reason"])
+        self.assertIn("pull requests", required["reason"])
+
+    def test_offers_no_checks_when_they_cannot_be_read(self):
+        self.github.add_pull(7, merged_at="2026-02-01T00:00:00Z", updated_at="2026-02-01T00:00:00Z", checks=["test"])
+        self.github.failing.add(("GET", "repos/octo/widgets/commits/sha7/status"))
+        out = self.detect_json()
+        self.assertEqual(out["checks"], [])
+        required = self.options(out)["required_checks"]
+        self.assertFalse(required["available"])
+        self.assertIn("Server Error", required["reason"])
+        self.assertIn("#7", required["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

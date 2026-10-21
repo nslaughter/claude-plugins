@@ -16,6 +16,11 @@ its branch-rules endpoint, so explicit refs, patterns, exclusions and the
 ruleset's enforcement all count. A rule of the skill's own ruleset counts as
 set only when GitHub enforces it there: a disabled ruleset sets nothing.
 
+The checks offered are those that ran on the pull request merged last, or
+on the default branch's latest commit when none has merged. When GitHub
+refuses a request while finding them, none are offered, and the
+`required_checks` option gives the API's reason.
+
 Needs only Python 3 and an authenticated `gh`. Reads only; changes nothing.
 """
 
@@ -102,12 +107,14 @@ def bypass_of(ruleset):
 
 
 def latest_merged(repo, branch):
-    """The pull request merged into `branch` most recently, or None when none was.
+    """(True, the pull request merged into `branch` most recently, or None when none was),
+    or (False, the API's message) when a page can't be read.
 
     The API can't sort by merge time, so closed pull requests come newest
     update first. A pull request is never updated before it merges, so once
     the latest merge found is no earlier than a page's oldest update, no later
-    page can hold a later one.
+    page can hold a later one. None means GitHub listed every closed pull
+    request and none merged, never that the listing failed.
     """
     latest, page = None, 1
     while True:
@@ -115,36 +122,44 @@ def latest_merged(repo, branch):
             f"repos/{repo}/pulls?state=closed&base={branch}&sort=updated&direction=desc"
             f"&per_page={PER_PAGE}&page={page}"
         )
-        if not ok or not pulls:
-            return latest
+        if not ok:
+            return False, pulls
+        pulls = pulls or []
         for pull in pulls:
             if pull.get("merged_at") and (latest is None or pull["merged_at"] > latest["merged_at"]):
                 latest = pull
         if len(pulls) < PER_PAGE or (latest is not None and latest["merged_at"] >= pulls[-1]["updated_at"]):
-            return latest
+            return True, latest
         page += 1
 
 
 def check_names(repo, branch):
-    """The checks that ran on the latest merged pull request, and where they came from.
+    """The checks that ran on the latest merged pull request, where they came from,
+    and why they couldn't be found: (names, source, None), or ([], source, the reason).
 
     Only a check that runs on pull requests can be required: one that runs
     only on pushes or on a schedule would never report, and every merge would
     wait for it. Only when no pull request has merged does the default
-    branch's latest commit stand in.
+    branch's latest commit stand in. When GitHub refuses a request, no checks
+    are offered and the reason gives the API's message: neither the default
+    branch's checks nor a list read in part stands in for them. The source
+    is None when the pull requests couldn't be listed.
     """
+    ok, merged = latest_merged(repo, branch)
+    if not ok:
+        return [], None, f"The pull requests merged into {branch} couldn't be listed: {merged}"
     ref, source = branch, f"{branch}'s latest commit"
-    merged = latest_merged(repo, branch)
     if merged is not None:
         ref, source = merged["head"]["sha"], f"pull request #{merged['number']}, the latest merged"
-    names = set()
     ok, runs = api(f"repos/{repo}/commits/{ref}/check-runs?per_page=100")
-    if ok:
-        names.update(run["name"] for run in runs.get("check_runs", []))
+    if not ok:
+        return [], source, f"The check runs of {source} couldn't be read: {runs}"
     ok, status = api(f"repos/{repo}/commits/{ref}/status")
-    if ok:
-        names.update(s["context"] for s in status.get("statuses", []))
-    return sorted(names), source
+    if not ok:
+        return [], source, f"The commit statuses of {source} couldn't be read: {status}"
+    names = {run["name"] for run in runs.get("check_runs", [])}
+    names.update(s["context"] for s in status.get("statuses", []))
+    return sorted(names), source, None
 
 
 def option(id, group, label, *, available, reason, current, default, description=""):
@@ -208,7 +223,7 @@ def main():
             else "everyone with admin access to the repository"
         )
 
-    checks, checks_source = check_names(repo, branch)
+    checks, checks_source, checks_error = check_names(repo, branch)
     # Only what GitHub enforces on the default branch is already set.
     enforced = ours if ours is not None and ours["id"] in applying else None
     pull = rule(enforced, "pull_request")
@@ -275,9 +290,9 @@ def main():
             "required_checks",
             "ruleset",
             f"Require checks to pass: {', '.join(checks)}" if checks else "Require checks to pass",
-            description=f"The checks that ran on {checks_source}.",
+            description=f"The checks that ran on {checks_source}." if checks_source else "",
             available=can_rule and bool(checks),
-            reason=rules_reason if not can_rule else f"No checks ran on {checks_source}.",
+            reason=rules_reason if not can_rule else (checks_error or f"No checks ran on {checks_source}."),
             current=sorted(
                 c["context"]
                 for c in ((status_rule or {}).get("parameters") or {}).get("required_status_checks", [])
