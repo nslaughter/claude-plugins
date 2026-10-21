@@ -24,8 +24,9 @@ detect.py stops with the API's message rather than report its rules as not
 set.
 
 The checks offered are those that ran on the pull request merged last, or
-on the default branch's latest commit when none has merged. When GitHub
-refuses a request while finding them, none are offered, and the
+on the default branch's latest commit when none has merged: every page of
+its check runs and of its commit statuses. When GitHub refuses a request
+while finding them, none are offered, and the
 `required_checks` option gives the API's reason.
 
 Needs only Python 3 and an authenticated `gh`. Reads only; changes nothing.
@@ -65,13 +66,18 @@ def api(path):
     return False, message or first_line(run.stderr) or first_line(run.stdout) or "the request failed"
 
 
-def api_pages(path):
-    """Every item of a list the API pages: (True, items), or (False, the API's message)."""
+def api_pages(path, key=None):
+    """Every item of a list the API pages: (True, items), or (False, the API's message).
+
+    With `key`, each page is an object that holds its part of the list under that key.
+    """
     items, page = [], 1
     while True:
         ok, data = api(f"{path}{'&' if '?' in path else '?'}per_page={PER_PAGE}&page={page}")
         if not ok:
             return False, data
+        if key is not None:
+            data = (data or {}).get(key)
         items += data or []
         if len(data or []) < PER_PAGE:
             return True, items
@@ -164,14 +170,14 @@ def check_names(repo, branch):
     ref, source = branch, f"{branch}'s latest commit"
     if merged is not None:
         ref, source = merged["head"]["sha"], f"pull request #{merged['number']}, the latest merged"
-    ok, runs = api(f"repos/{repo}/commits/{ref}/check-runs?per_page=100")
+    ok, runs = api_pages(f"repos/{repo}/commits/{ref}/check-runs", "check_runs")
     if not ok:
         return [], source, f"The check runs of {source} couldn't be read: {runs}"
-    ok, status = api(f"repos/{repo}/commits/{ref}/status")
+    ok, statuses = api_pages(f"repos/{repo}/commits/{ref}/status", "statuses")
     if not ok:
-        return [], source, f"The commit statuses of {source} couldn't be read: {status}"
-    names = {run["name"] for run in runs.get("check_runs", [])}
-    names.update(s["context"] for s in status.get("statuses", []))
+        return [], source, f"The commit statuses of {source} couldn't be read: {statuses}"
+    names = {run["name"] for run in runs}
+    names.update(s["context"] for s in statuses)
     return sorted(names), source, None
 
 

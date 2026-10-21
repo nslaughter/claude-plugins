@@ -52,7 +52,8 @@ class FakeGitHub:
         self.rulesets = {}  # id -> the ruleset as GitHub returns it
         self.applies = {}  # id -> whether its conditions match the default branch
         self.pulls = []  # closed pull requests into the default branch
-        self.checks = {}  # commit SHA -> names of the checks that ran on it
+        self.checks = {}  # commit SHA -> names of the check runs on it
+        self.statuses = {}  # commit SHA -> contexts of the commit statuses on it
         self.failing = set()  # (method, path) pairs that GitHub refuses
         self.after_save = None  # changes a saved ruleset before it's read back
         self.after_patch = None  # runs once the repository's settings are saved
@@ -79,12 +80,13 @@ class FakeGitHub:
         self.applies[ruleset_id] = applies
         return ruleset_id
 
-    def add_pull(self, number, *, updated_at, merged_at=None, checks=()):
+    def add_pull(self, number, *, updated_at, merged_at=None, checks=(), statuses=()):
         sha = f"sha{number}"
         self.pulls.append(
             {"number": number, "updated_at": updated_at, "merged_at": merged_at, "head": {"sha": sha}}
         )
         self.checks[sha] = list(checks)
+        self.statuses[sha] = list(statuses)
 
     # The scripts' helpers, replaced
 
@@ -152,10 +154,13 @@ class FakeGitHub:
         if rest == ["pulls"]:
             newest_first = sorted(self.pulls, key=lambda pull: pull["updated_at"], reverse=True)
             return self.page(newest_first, query)
+        # Both are objects that hold one page of their list.
         if rest[:1] == ["commits"] and rest[-1] == "check-runs":
-            return {"check_runs": [{"name": name} for name in self.checks.get(rest[1], [])]}
+            runs = [{"name": name} for name in self.checks.get(rest[1], [])]
+            return {"total_count": len(runs), "check_runs": self.page(runs, query)}
         if rest[:1] == ["commits"] and rest[-1] == "status":
-            return {"statuses": []}
+            statuses = [{"context": context, "state": "success"} for context in self.statuses.get(rest[1], [])]
+            return {"state": "success", "total_count": len(statuses), "statuses": self.page(statuses, query)}
         raise Refused("Not Found")
 
     def save(self, ruleset_id, body):

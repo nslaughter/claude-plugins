@@ -155,6 +155,15 @@ class CheckDiscoveryTest(DetectTest):
         self.assertEqual(out["checks"], ["test"])
         self.assertIn("#3", out["checks_source"])
 
+    def test_offers_the_checks_beyond_the_first_page(self):
+        runs = [f"run {number}" for number in range(105)]
+        statuses = [f"status {number}" for number in range(35)]
+        self.github.add_pull(
+            7, merged_at="2026-02-01T00:00:00Z", updated_at="2026-02-01T00:00:00Z", checks=runs, statuses=statuses
+        )
+        out = self.detect_json()
+        self.assertEqual(out["checks"], sorted(runs + statuses))
+
     def test_falls_back_to_the_default_branch_without_a_merged_pull_request(self):
         self.github.add_pull(4, updated_at="2026-01-01T00:00:00Z")
         self.github.checks["main"] = ["build"]
