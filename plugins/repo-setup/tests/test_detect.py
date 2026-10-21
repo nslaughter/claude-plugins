@@ -9,6 +9,7 @@ import unittest
 from fake_github import (
     ADMINS_PULL_REQUEST,
     FORCE_PUSH_AND_DELETION,
+    RELEASE_APP,
     FakeGitHub,
     load,
     pull_request_rule,
@@ -94,6 +95,14 @@ class DefaultBranchTest(DetectTest):
         self.assertTrue(options["block_force_push_and_deletion"]["current"])
         self.assertEqual(options["approvals"]["current"], 1)
         self.assertEqual(options["bypass"]["current"], "admins_pull_request")
+
+    def test_a_bypass_list_with_anyone_besides_admins_is_no_choice(self):
+        self.github.add_ruleset(
+            RULESET_NAME, rules=FORCE_PUSH_AND_DELETION, bypass_actors=ADMINS_PULL_REQUEST + [RELEASE_APP]
+        )
+        out = self.detect_json()
+        self.assertEqual(self.options(out)["bypass"]["current"], "other")
+        self.assertEqual(out["rulesets"]["other_bypass"], [RELEASE_APP])
 
 
 class CheckDiscoveryTest(DetectTest):

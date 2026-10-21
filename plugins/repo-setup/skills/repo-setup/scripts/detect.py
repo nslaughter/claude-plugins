@@ -15,6 +15,10 @@ Whether a ruleset applies to the default branch is GitHub's own answer, from
 its branch-rules endpoint, so explicit refs, patterns, exclusions and the
 ruleset's enforcement all count. A rule of the skill's own ruleset counts as
 set only when GitHub enforces it there: a disabled ruleset sets nothing.
+Its bypass list is one of the skill's choices only when it holds the admin
+role alone, or nobody; `rulesets.other_bypass` lists anyone else on it, an
+app, a team or another role, and while the ruleset is in force the bypass
+option's `current` is then "other".
 
 The checks offered are those that ran on the pull request merged last, or
 on the default branch's latest commit when none has merged. When GitHub
@@ -29,6 +33,7 @@ import subprocess
 import sys
 
 RULESET_NAME = "repo-setup: default branch"
+ADMIN_ROLE = 5  # The built-in repository admin role, as rulesets name it.
 PER_PAGE = 100
 MERGE_KEYS = [
     "allow_squash_merge",
@@ -93,17 +98,22 @@ def rule(ruleset, kind):
     return next((r for r in (ruleset or {}).get("rules", []) if r.get("type") == kind), None)
 
 
+def is_admin_role(actor):
+    return actor.get("actor_type") == "RepositoryRole" and actor.get("actor_id") == ADMIN_ROLE
+
+
 def bypass_of(ruleset):
+    """The bypass choice the ruleset's bypass list is, or "other" when the list
+    holds anyone besides the admin role: every choice replaces the whole list,
+    so none of them is already set."""
     if ruleset is None:
         return None
     actors = ruleset.get("bypass_actors") or []
-    admin = next(
-        (a for a in actors if a.get("actor_type") == "RepositoryRole" and a.get("actor_id") == 5),
-        None,
-    )
-    if admin is None:
-        return "none" if not actors else "other"
-    return "admins_always" if admin.get("bypass_mode") == "always" else "admins_pull_request"
+    if not actors:
+        return "none"
+    if not all(is_admin_role(a) for a in actors):
+        return "other"
+    return "admins_always" if actors[0].get("bypass_mode") == "always" else "admins_pull_request"
 
 
 def latest_merged(repo, branch):
@@ -356,6 +366,9 @@ def main():
                 "reason": None if rulesets_ok else listed,
                 "existing": existing,
                 "ours": None if ours is None else ours["id"],
+                # Anyone besides the admin role who may bypass the skill's ruleset: any bypass
+                # chosen replaces them.
+                "other_bypass": [a for a in (ours or {}).get("bypass_actors") or [] if not is_admin_role(a)],
             },
             "classic_protection": classic,
             "checks": checks,

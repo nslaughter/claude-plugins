@@ -70,6 +70,11 @@ Multi-select questions start with nothing ticked, so say in the first question t
    Say that rulesets grant a bypass to a role, not to one person, which on a personal
    repository is the owner alone.
 
+   When `rulesets.other_bypass` lists anyone, such as an app, name each by its `actor_type`,
+   `actor_id` and `bypass_mode`, and say that whichever bypass is chosen replaces the whole
+   list, so they would no longer bypass the ruleset. While the ruleset is in force, the user
+   can keep the list as it is through Other; then leave `bypass` out of the plan.
+
 `resolve_threads` and approvals belong to the pull request rule, so the plan carries `approvals`
 only with `require_pull_request`, and `apply.py` refuses it otherwise, even 0. If the user picks
 `resolve_threads` without `require_pull_request`, or an approvals answer that would change
