@@ -24,7 +24,10 @@ python3 -I ${CLAUDE_SKILL_DIR}/scripts/detect.py <owner/repo>
 
 It prints JSON. `options` lists every setting with `available`, the API's own `reason` when it
 isn't, `current`, and `default`. Availability comes from asking the API, not from the plan's name:
-on GitHub Free a private repository's rulesets call refuses, and the reason says so.
+on GitHub Free a private repository's rulesets call refuses, and the reason says so. If it stops
+with an error instead, because GitHub wouldn't say which rulesets apply to the default branch or
+wouldn't let it read this skill's ruleset, report the error word for word and stop: what is in
+force can't be known.
 
 - If `is_admin` is false, stop: say that changing the settings needs admin access, and show the
   current settings from `merge`.

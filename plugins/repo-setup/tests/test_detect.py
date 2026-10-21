@@ -4,7 +4,11 @@ Run from the repository's root:
   python3 -m unittest discover -s plugins/repo-setup/tests
 """
 
+import contextlib
+import io
+import sys
 import unittest
+from unittest import mock
 
 from fake_github import (
     ADMINS_PULL_REQUEST,
@@ -49,6 +53,35 @@ class RulesetLookupTest(DetectTest):
         out = self.detect_json("Octo/Widgets")
         self.assertEqual(out["repo"], "octo/widgets")
         self.assertEqual(out["rulesets"]["ours"], ours)
+
+    def test_stops_when_its_ruleset_cannot_be_read(self):
+        ours = self.github.add_ruleset(
+            RULESET_NAME, rules=[pull_request_rule(approvals=2)], bypass_actors=ADMINS_PULL_REQUEST
+        )
+        self.github.failing.add(("GET", f"repos/octo/widgets/rulesets/{ours}"))
+        printed = io.StringIO()
+        with mock.patch.object(sys, "argv", ["detect.py", "octo/widgets"]), contextlib.redirect_stdout(printed):
+            with self.assertRaises(SystemExit) as stop:
+                self.detect.main()
+        self.assertIn("Server Error", str(stop.exception.code))
+        self.assertEqual(printed.getvalue(), "")  # no report with its rules as not set
+
+    def test_lists_a_ruleset_it_does_not_read_in_full(self):
+        other = self.github.add_ruleset("other", rules=FORCE_PUSH_AND_DELETION)
+        self.github.failing.add(("GET", f"repos/octo/widgets/rulesets/{other}"))
+        out = self.detect_json()
+        self.assertEqual(
+            out["rulesets"]["existing"],
+            [
+                {
+                    "id": other,
+                    "name": "other",
+                    "enforcement": "active",
+                    "source": "octo/widgets",
+                    "targets_default_branch": True,
+                }
+            ],
+        )
 
 
 class DefaultBranchTest(DetectTest):

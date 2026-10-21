@@ -18,7 +18,10 @@ set only when GitHub enforces it there: a disabled ruleset sets nothing.
 Its bypass list is one of the skill's choices only when it holds the admin
 role alone, or nobody; `rulesets.other_bypass` lists anyone else on it, an
 app, a team or another role, and while the ruleset is in force the bypass
-option's `current` is then "other".
+option's `current` is then "other". When GitHub refuses to say which
+rulesets apply to the default branch, or to read the skill's own ruleset,
+detect.py stops with the API's message rather than report its rules as not
+set.
 
 The checks offered are those that ran on the pull request merged last, or
 on the default branch's latest commit when none has merged. When GitHub
@@ -203,20 +206,24 @@ def main():
         if not ok:
             sys.exit(f"detect.py: gh api repos/{repo}/rules/branches/{branch}: {applied}")
         applying = {r.get("ruleset_id") for r in applied}
+        # The list gives each ruleset's name, source and enforcement; only the skill's own
+        # ruleset is read in full, for its rules and bypass list.
         for summary in listed or []:
-            ok, ruleset = api(f"repos/{repo}/rulesets/{summary['id']}")
-            if not ok:
-                continue
-            entry = {
-                "id": ruleset["id"],
-                "name": ruleset["name"],
-                "enforcement": ruleset.get("enforcement"),
-                "source": ruleset.get("source"),
-                "targets_default_branch": ruleset["id"] in applying,
-            }
-            existing.append(entry)
-            if ruleset["name"] == RULESET_NAME and (ruleset.get("source") or "").lower() == repo.lower():
-                ours = ruleset
+            existing.append(
+                {
+                    "id": summary["id"],
+                    "name": summary["name"],
+                    "enforcement": summary.get("enforcement"),
+                    "source": summary.get("source"),
+                    "targets_default_branch": summary["id"] in applying,
+                }
+            )
+            if summary["name"] == RULESET_NAME and (summary.get("source") or "").lower() == repo.lower():
+                path = f"repos/{repo}/rulesets/{summary['id']}"
+                ok, ours = api(path)
+                if not ok:
+                    # Rules that can't be read aren't rules that aren't set.
+                    sys.exit(f"detect.py: gh api {path}: {ours}")
 
     ok, protection = api(f"repos/{repo}/branches/{branch}/protection")
     classic = True if ok else (False if "not protected" in str(protection).lower() else None)
