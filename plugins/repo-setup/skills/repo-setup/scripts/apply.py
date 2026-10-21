@@ -31,8 +31,10 @@ kept, and the update makes it active with only the rules chosen.
 
 Other rulesets and classic branch protection are never touched. With
 --dry-run it prints the calls it would make and changes nothing. Otherwise
-it prints a report: each setting before and after, and whether the
-read-back matches what was asked. For the ruleset, every value saved is
+it prints a report: each setting before and after, whether it was saved,
+and whether the read-back matches what was asked. A setting saved but not
+read back has `after` null and isn't ok, and the ruleset is still
+applied. For the ruleset, every value saved is
 compared: its rules and their parameters, its branch condition, its
 enforcement and its bypass list, with each bypass role and mode as GitHub's
 GraphQL API names them. `ruleset.mismatches` says what reads back
@@ -294,15 +296,27 @@ def main():
     report = {"repo": repo, "settings": [], "ruleset": None, "errors": []}
 
     if patch:
-        before = gh_api("GET", f"repos/{repo}")
+        before = gh_api("GET", f"repos/{repo}")  # Nothing is changed yet if this fails.
+        saved, after = False, None
         try:
             gh_api("PATCH", f"repos/{repo}", body=patch)
+            saved = True
         except RuntimeError as error:
             report["errors"].append(str(error))
-        after = gh_api("GET", f"repos/{repo}")
+        # Changed or not, the settings are reported, and the ruleset still applied, if reading them back fails.
+        try:
+            after = gh_api("GET", f"repos/{repo}")
+        except RuntimeError as error:
+            report["errors"].append(str(error))
         for key, wanted in patch.items():
             report["settings"].append(
-                {"setting": key, "before": before.get(key), "after": after.get(key), "ok": after.get(key) == wanted}
+                {
+                    "setting": key,
+                    "before": before.get(key),
+                    "after": None if after is None else after.get(key),
+                    "saved": saved,
+                    "ok": after is not None and after.get(key) == wanted,
+                }
             )
 
     if body is not None:

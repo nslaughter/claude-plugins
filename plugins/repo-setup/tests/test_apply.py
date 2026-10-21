@@ -167,5 +167,32 @@ class ReadBackTest(ApplyTest):
         self.assertFalse(out["ruleset"]["ok"])
 
 
+class MergeSettingsTest(ApplyTest):
+    def test_reports_saved_settings_when_reading_them_back_fails(self):
+        self.github.after_patch = lambda: self.github.failing.add(("GET", "repos/octo/widgets"))
+        code, out = self.apply_plan(FULL_RULESET, merge=["delete_branch"])
+        self.assertEqual(code, 1, out)
+        self.assertIsInstance(out, dict, out)
+        self.assertTrue(any(error.startswith("GET repos/octo/widgets:") for error in out["errors"]), out)
+        self.assertEqual(
+            out["settings"],
+            [{"setting": "delete_branch_on_merge", "before": False, "after": None, "saved": True, "ok": False}],
+        )
+        # The ruleset is still applied.
+        self.assertEqual(out["ruleset"]["action"], "created")
+        self.assertTrue(out["ruleset"]["ok"], out)
+
+    def test_reports_settings_that_were_not_saved(self):
+        self.github.failing.add(("PATCH", "repos/octo/widgets"))
+        code, out = self.apply_plan(None, merge=["delete_branch", "auto_merge_off"])
+        self.assertEqual(code, 1, out)
+        settings = {entry["setting"]: entry for entry in out["settings"]}
+        self.assertFalse(settings["delete_branch_on_merge"]["saved"])
+        self.assertFalse(settings["delete_branch_on_merge"]["ok"])
+        # Already off: it reads back as asked, though the change wasn't saved.
+        self.assertFalse(settings["allow_auto_merge"]["saved"])
+        self.assertTrue(settings["allow_auto_merge"]["ok"])
+
+
 if __name__ == "__main__":
     unittest.main()

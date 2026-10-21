@@ -114,7 +114,9 @@ every value it saved is compared, down to each rule's parameters and the bypass 
 
 ## 4. Report
 
-- A table of each setting: before, after, and whether it reads back as asked.
+- A table of each setting: before, after, and whether it reads back as asked. A setting whose
+  `after` is null couldn't be read back: say whether it was saved (`saved`), and that it needs
+  checking on GitHub.
 - The ruleset's link (`ruleset.url`), its rules, and its bypass as GitHub names it
   (`ruleset.bypass`, for example the role `admin`, pull requests only). When `ruleset.ok` is
   false, each of `ruleset.mismatches`, word for word. A ruleset that was saved but couldn't be

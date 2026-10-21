@@ -55,6 +55,7 @@ class FakeGitHub:
         self.checks = {}  # commit SHA -> names of the checks that ran on it
         self.failing = set()  # (method, path) pairs that GitHub refuses
         self.after_save = None  # changes a saved ruleset before it's read back
+        self.after_patch = None  # runs once the repository's settings are saved
         self.calls = []
         self.next_id = 1000
 
@@ -120,6 +121,8 @@ class FakeGitHub:
         if not rest:
             if method == "PATCH":
                 self.info.update(body)
+                if self.after_patch is not None:
+                    self.after_patch()
             return copy.deepcopy(self.info)
         if rest == ["rulesets"] and method == "GET":
             summaries = [
