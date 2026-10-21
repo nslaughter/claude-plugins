@@ -194,5 +194,42 @@ class CheckDiscoveryTest(DetectTest):
         self.assertIn("#7", required["reason"])
 
 
+class BranchNameTest(DetectTest):
+    # A `#` would end the path gh sends, so GitHub would answer for another branch; an `&` or a `+`
+    # would change the pull request query. A `/` is a branch's own.
+    NAMES = ("main#1", "fix+docs&tests", "release/1.0")
+
+    def with_default_branch(self, name):
+        self.github = FakeGitHub()
+        self.detect.api = self.github.detect_api
+        self.github.info["default_branch"] = name
+
+    def test_reads_the_default_branch_whatever_its_name(self):
+        for name in self.NAMES:
+            with self.subTest(branch=name):
+                self.with_default_branch(name)
+                self.github.add_ruleset(RULESET_NAME, rules=[pull_request_rule(approvals=2)] + FORCE_PUSH_AND_DELETION)
+                self.github.add_pull(
+                    7, merged_at="2026-02-01T00:00:00Z", updated_at="2026-02-01T00:00:00Z", checks=["test"]
+                )
+                out = self.detect_json()
+                options = self.options(out)
+                self.assertTrue(options["require_pull_request"]["current"])
+                self.assertEqual(options["approvals"]["current"], 2)
+                self.assertTrue(out["rulesets"]["existing"][0]["targets_default_branch"])
+                self.assertEqual(out["checks"], ["test"])
+                self.assertIn("#7", out["checks_source"])
+                self.assertIs(out["classic_protection"], False)
+
+    def test_falls_back_to_the_default_branch_whatever_its_name(self):
+        for name in self.NAMES:
+            with self.subTest(branch=name):
+                self.with_default_branch(name)
+                self.github.checks[name] = ["build"]
+                out = self.detect_json()
+                self.assertEqual(out["checks"], ["build"])
+                self.assertEqual(out["checks_source"], f"{name}'s latest commit")
+
+
 if __name__ == "__main__":
     unittest.main()

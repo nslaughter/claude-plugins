@@ -147,6 +147,19 @@ class LaterRunTest(ApplyTest):
         self.assertEqual(call["body"]["bypass_actors"], [])
         self.assertEqual(call["body"]["conditions"]["ref_name"]["include"], ["~DEFAULT_BRANCH"])
 
+    def test_keeps_the_rules_left_unticked_whatever_the_default_branch_is_named(self):
+        # gh would send "main#1" as "main", a branch GitHub enforces no ruleset on.
+        self.github.info["default_branch"] = "main#1"
+        ours = self.github.add_ruleset(
+            RULESET_NAME, rules=[pull_request_rule(approvals=2)], bypass_actors=ADMINS_PULL_REQUEST
+        )
+        call = self.planned_ruleset_call({"block_force_push_and_deletion": True})
+        self.assertTrue(call["path"].endswith(f"/rulesets/{ours}"))
+        rules = {rule["type"]: rule for rule in call["body"]["rules"]}
+        self.assertEqual(set(rules), {"pull_request", "non_fast_forward", "deletion"})
+        self.assertEqual(rules["pull_request"]["parameters"]["required_approving_review_count"], 2)
+        self.assertEqual(call["body"]["bypass_actors"], ADMINS_PULL_REQUEST)
+
 
 class ReadBackTest(ApplyTest):
     def test_a_ruleset_that_reads_back_as_asked_is_ok(self):

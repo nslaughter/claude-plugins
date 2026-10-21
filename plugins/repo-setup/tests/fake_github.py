@@ -3,7 +3,8 @@
 The tests replace each script's `gh` helper with this fake, so they need no
 network and no `gh`. It keeps a repository, its rulesets and its closed pull
 requests in memory, and pages lists the way GitHub does (30 a page unless
-`per_page` says otherwise).
+`per_page` says otherwise). It reads a path as gh sends it and GitHub reads
+it: a `#` ends it, and each of its parts and query values is unescaped.
 """
 
 import contextlib
@@ -14,7 +15,7 @@ import json
 import os
 import sys
 from unittest import mock
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 SCRIPTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skills", "repo-setup", "scripts")
 ADMIN_ROLE = 5
@@ -50,7 +51,7 @@ class FakeGitHub:
             "allow_auto_merge": False,
         }
         self.rulesets = {}  # id -> the ruleset as GitHub returns it
-        self.applies = {}  # id -> whether its conditions match the default branch
+        self.applies = {}  # id -> whether its conditions match the default branch; none match another
         self.pulls = []  # closed pull requests into the default branch
         self.checks = {}  # commit SHA -> names of the check runs on it
         self.statuses = {}  # commit SHA -> contexts of the commit statuses on it
@@ -109,7 +110,7 @@ class FakeGitHub:
     def answer(self, method, path, body=None, fields=()):
         url = urlsplit(path)
         query = {key: values[0] for key, values in parse_qs(url.query).items()}
-        parts = url.path.strip("/").split("/")
+        parts = [unquote(part) for part in url.path.strip("/").split("/")]
         self.calls.append((method, path, copy.deepcopy(body)))
         if (method, url.path) in self.failing:
             raise Refused("Server Error")
@@ -143,23 +144,30 @@ class FakeGitHub:
                 return self.save(ruleset_id, body)
             return copy.deepcopy(self.rulesets[ruleset_id])
         if rest[:2] == ["rules", "branches"]:
+            # GitHub answers for any name, a branch's or not, and no ruleset here matches another.
+            on_default_branch = "/".join(rest[2:]) == self.info["default_branch"]
             applied = []
             for ruleset_id, ruleset in sorted(self.rulesets.items()):
-                if ruleset["enforcement"] == "active" and self.applies[ruleset_id]:
+                if ruleset["enforcement"] == "active" and self.applies[ruleset_id] and on_default_branch:
                     for rule in ruleset["rules"]:
                         applied.append(dict(rule, ruleset_source_type="Repository", ruleset_source=self.repo, ruleset_id=ruleset_id))
             return self.page(applied, query)
         if rest[:1] == ["branches"] and rest[-1] == "protection":
+            if "/".join(rest[1:-1]) != self.info["default_branch"]:
+                raise Refused("Branch not found")
             raise Refused("Branch not protected")
         if rest == ["pulls"]:
-            newest_first = sorted(self.pulls, key=lambda pull: pull["updated_at"], reverse=True)
+            # Every pull request kept here is into the default branch.
+            into = self.pulls if query.get("base", self.info["default_branch"]) == self.info["default_branch"] else []
+            newest_first = sorted(into, key=lambda pull: pull["updated_at"], reverse=True)
             return self.page(newest_first, query)
-        # Both are objects that hold one page of their list.
+        # Both are objects that hold one page of their list. The ref is a SHA or a branch's name.
+        ref = "/".join(rest[1:-1])
         if rest[:1] == ["commits"] and rest[-1] == "check-runs":
-            runs = [{"name": name} for name in self.checks.get(rest[1], [])]
+            runs = [{"name": name} for name in self.checks.get(ref, [])]
             return {"total_count": len(runs), "check_runs": self.page(runs, query)}
         if rest[:1] == ["commits"] and rest[-1] == "status":
-            statuses = [{"context": context, "state": "success"} for context in self.statuses.get(rest[1], [])]
+            statuses = [{"context": context, "state": "success"} for context in self.statuses.get(ref, [])]
             return {"state": "success", "total_count": len(statuses), "statuses": self.page(statuses, query)}
         raise Refused("Not Found")
 

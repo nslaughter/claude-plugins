@@ -57,6 +57,7 @@ import copy
 import json
 import subprocess
 import sys
+from urllib.parse import quote
 
 RULESET_NAME = "repo-setup: default branch"
 RULE_CHOICES = ("require_pull_request", "checks", "block_force_push_and_deletion")
@@ -79,6 +80,16 @@ BYPASS = {
 
 def first_line(text):
     return next((line.strip() for line in (text or "").splitlines() if line.strip()), "")
+
+
+def escaped(name):
+    """A branch's name as one part of an API path, or as a query's value.
+
+    gh sends a path as it's given: a `#` in the name would end the path
+    there, so GitHub would answer for another branch, and an `&`, a `+` or a
+    `%` would change the query. GitHub unescapes each part, a `/` included.
+    """
+    return quote(name, safe="")
 
 
 def gh_api(method, path, body=None, fields=()):
@@ -133,7 +144,8 @@ def enforced_on_default_branch(repo, ruleset):
     of every active ruleset whose conditions match the branch.
     """
     branch = gh_api("GET", f"repos/{repo}")["default_branch"]
-    return any(rule.get("ruleset_id") == ruleset["id"] for rule in gh_pages(f"repos/{repo}/rules/branches/{branch}"))
+    rules = gh_pages(f"repos/{repo}/rules/branches/{escaped(branch)}")
+    return any(rule.get("ruleset_id") == ruleset["id"] for rule in rules)
 
 
 def ruleset_body(plan, enforced=None):

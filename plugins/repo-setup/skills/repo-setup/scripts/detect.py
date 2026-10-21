@@ -35,6 +35,7 @@ Needs only Python 3 and an authenticated `gh`. Reads only; changes nothing.
 import json
 import subprocess
 import sys
+from urllib.parse import quote
 
 RULESET_NAME = "repo-setup: default branch"
 ADMIN_ROLE = 5  # The built-in repository admin role, as rulesets name it.
@@ -52,6 +53,16 @@ MERGE_KEYS = [
 
 def first_line(text):
     return next((line.strip() for line in (text or "").splitlines() if line.strip()), "")
+
+
+def escaped(name):
+    """A branch's name as one part of an API path, or as a query's value.
+
+    gh sends a path as it's given: a `#` in the name would end the path
+    there, so GitHub would answer for another branch, and an `&`, a `+` or a
+    `%` would change the query. GitHub unescapes each part, a `/` included.
+    """
+    return quote(name, safe="")
 
 
 def api(path):
@@ -138,7 +149,7 @@ def latest_merged(repo, branch):
     latest, page = None, 1
     while True:
         ok, pulls = api(
-            f"repos/{repo}/pulls?state=closed&base={branch}&sort=updated&direction=desc"
+            f"repos/{repo}/pulls?state=closed&base={escaped(branch)}&sort=updated&direction=desc"
             f"&per_page={PER_PAGE}&page={page}"
         )
         if not ok:
@@ -170,10 +181,10 @@ def check_names(repo, branch):
     ref, source = branch, f"{branch}'s latest commit"
     if merged is not None:
         ref, source = merged["head"]["sha"], f"pull request #{merged['number']}, the latest merged"
-    ok, runs = api_pages(f"repos/{repo}/commits/{ref}/check-runs", "check_runs")
+    ok, runs = api_pages(f"repos/{repo}/commits/{escaped(ref)}/check-runs", "check_runs")
     if not ok:
         return [], source, f"The check runs of {source} couldn't be read: {runs}"
-    ok, statuses = api_pages(f"repos/{repo}/commits/{ref}/status", "statuses")
+    ok, statuses = api_pages(f"repos/{repo}/commits/{escaped(ref)}/status", "statuses")
     if not ok:
         return [], source, f"The commit statuses of {source} couldn't be read: {statuses}"
     names = {run["name"] for run in runs}
@@ -208,9 +219,10 @@ def main():
     if rulesets_ok:
         # The rulesets GitHub enforces on the default branch, by its own reading of
         # their conditions and enforcement.
-        ok, applied = api_pages(f"repos/{repo}/rules/branches/{branch}")
+        path = f"repos/{repo}/rules/branches/{escaped(branch)}"
+        ok, applied = api_pages(path)
         if not ok:
-            sys.exit(f"detect.py: gh api repos/{repo}/rules/branches/{branch}: {applied}")
+            sys.exit(f"detect.py: gh api {path}: {applied}")
         applying = {r.get("ruleset_id") for r in applied}
         # The list gives each ruleset's name, source and enforcement; only the skill's own
         # ruleset is read in full, for its rules and bypass list.
@@ -231,7 +243,7 @@ def main():
                     # Rules that can't be read aren't rules that aren't set.
                     sys.exit(f"detect.py: gh api {path}: {ours}")
 
-    ok, protection = api(f"repos/{repo}/branches/{branch}/protection")
+    ok, protection = api(f"repos/{repo}/branches/{escaped(branch)}/protection")
     classic = True if ok else (False if "not protected" in str(protection).lower() else None)
 
     if info["owner"]["type"] == "User":
