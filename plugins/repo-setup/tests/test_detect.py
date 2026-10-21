@@ -40,12 +40,13 @@ class DetectTest(unittest.TestCase):
 
 class RulesetLookupTest(DetectTest):
     def test_finds_its_ruleset_beyond_the_first_page(self):
-        for number in range(35):
+        # More than a page of 100: GitHub's default page of 30 wouldn't reach it either.
+        for number in range(105):
             self.github.add_ruleset(f"other {number}", applies=False)
         ours = self.github.add_ruleset(RULESET_NAME, rules=FORCE_PUSH_AND_DELETION)
         out = self.detect_json()
         self.assertEqual(out["rulesets"]["ours"], ours)
-        self.assertEqual(len(out["rulesets"]["existing"]), 36)
+        self.assertEqual(len(out["rulesets"]["existing"]), 106)
         self.assertTrue(self.options(out)["block_force_push_and_deletion"]["current"])
 
     def test_finds_its_ruleset_whatever_the_case_of_the_name_given(self):

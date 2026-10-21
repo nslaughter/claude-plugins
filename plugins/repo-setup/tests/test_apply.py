@@ -56,7 +56,8 @@ class ApplyTest(unittest.TestCase):
 
 class LookupTest(ApplyTest):
     def test_finds_its_ruleset_beyond_the_first_page(self):
-        for number in range(35):
+        # More than a page of 100: GitHub's default page of 30 wouldn't reach it either.
+        for number in range(105):
             self.github.add_ruleset(f"other {number}")
         ours = self.github.add_ruleset(RULESET_NAME, rules=FORCE_PUSH_AND_DELETION)
         call = self.planned_ruleset_call(FULL_RULESET)
