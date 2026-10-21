@@ -12,6 +12,7 @@ import unittest
 from fake_github import (
     ADMINS_PULL_REQUEST,
     FORCE_PUSH_AND_DELETION,
+    RELEASE_APP,
     FakeGitHub,
     checks_rule,
     load,
@@ -100,6 +101,28 @@ class LaterRunTest(ApplyTest):
         (pull,) = [rule for rule in call["body"]["rules"] if rule["type"] == "pull_request"]
         self.assertTrue(pull["parameters"]["required_review_thread_resolution"])
         self.assertEqual(pull["parameters"]["required_approving_review_count"], 1)
+
+    def test_keeps_the_approvals_a_plan_leaves_out(self):
+        self.github.add_ruleset(RULESET_NAME, rules=[pull_request_rule(approvals=2)])
+        call = self.planned_ruleset_call({"require_pull_request": True, "resolve_threads": True, "bypass": "none"})
+        (pull,) = [rule for rule in call["body"]["rules"] if rule["type"] == "pull_request"]
+        self.assertEqual(pull["parameters"]["required_approving_review_count"], 2)
+
+    def test_keeps_the_bypass_list_a_plan_leaves_out(self):
+        bypass = ADMINS_PULL_REQUEST + [RELEASE_APP]
+        ours = self.github.add_ruleset(RULESET_NAME, rules=FORCE_PUSH_AND_DELETION, bypass_actors=bypass)
+        code, out = self.apply_plan({"require_pull_request": True, "approvals": 0})
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.github.rulesets[ours]["bypass_actors"], bypass)
+        self.assertTrue(out["ruleset"]["ok"], out)
+
+    def test_refuses_approvals_without_the_pull_request_rule_even_zero(self):
+        self.github.add_ruleset(RULESET_NAME, rules=[pull_request_rule(approvals=2)], bypass_actors=ADMINS_PULL_REQUEST)
+        code, out = self.apply_plan(
+            {"block_force_push_and_deletion": True, "approvals": 0, "bypass": "admins_pull_request"}
+        )
+        self.assertNotEqual(code, 0, out)
+        self.assertFalse([call for call in self.github.calls if call[0] in ("PUT", "POST")])
 
     def test_does_not_carry_over_the_rules_of_a_disabled_ruleset(self):
         self.github.add_ruleset(RULESET_NAME, enforcement="disabled", rules=[pull_request_rule(), checks_rule("test")])

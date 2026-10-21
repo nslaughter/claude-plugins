@@ -19,15 +19,20 @@ The plan names only what was chosen; nothing else is changed:
     }
   }
 
-"ruleset" is null when no ruleset rule was chosen.
+"ruleset" is null when no ruleset rule was chosen. "approvals" is part of
+the pull request rule, so a plan with "approvals" and without
+"require_pull_request" is refused, whatever the number.
 
 The ruleset is named "repo-setup: default branch" and targets the default
 branch; a later run updates it in place. An update keeps every rule and
 parameter the plan doesn't choose, so a rule left unticked stays as it is:
 the plan adds rules and sets the parameters it names, and never removes a
 rule or turns off thread resolution. "checks" replaces the list of required
-checks. A ruleset that isn't active enforces nothing, so its rules aren't
-kept, and the update makes it active with only the rules chosen.
+checks. A plan without "approvals" keeps the pull request rule's count (0
+on a new rule), and one without "bypass" keeps the bypass list (nobody on
+a new ruleset). A ruleset that isn't active enforces nothing, so its rules
+and bypass list aren't kept, and the update makes it active with only the
+rules chosen.
 
 Other rulesets and classic branch protection are never touched. With
 --dry-run it prints the calls it would make and changes nothing. Otherwise
@@ -123,12 +128,13 @@ def ruleset_body(plan, existing=None):
 
     `existing` is this skill's ruleset from an earlier run, or None. When it
     is active, its rules and parameters the plan doesn't choose are kept, so
-    a later run never drops a protection the user left unticked.
+    a later run never drops a protection the user left unticked, and so is
+    its bypass list when the plan names no bypass.
     """
-    kept = (existing or {}).get("rules") if (existing or {}).get("enforcement") == "active" else None
+    kept = existing if (existing or {}).get("enforcement") == "active" else {}
     rules = [
         {key: copy.deepcopy(value) for key, value in old.items() if key in ("type", "parameters")}
-        for old in kept or []
+        for old in kept.get("rules") or []
     ]
 
     def rule(kind, parameters=None):
@@ -151,7 +157,8 @@ def ruleset_body(plan, existing=None):
                 "required_review_thread_resolution": False,
             },
         ).setdefault("parameters", {})
-        parameters["required_approving_review_count"] = int(plan.get("approvals") or 0)
+        if plan.get("approvals") is not None:
+            parameters["required_approving_review_count"] = int(plan["approvals"])
         if plan.get("resolve_threads"):
             parameters["required_review_thread_resolution"] = True
     if plan.get("checks"):
@@ -165,12 +172,19 @@ def ruleset_body(plan, existing=None):
     if plan.get("block_force_push_and_deletion"):
         rule("non_fast_forward")
         rule("deletion")
+    if plan.get("bypass"):
+        bypass_actors = BYPASS[plan["bypass"]]
+    else:
+        bypass_actors = [
+            {key: copy.deepcopy(value) for key, value in actor.items() if key in ("actor_id", "actor_type", "bypass_mode")}
+            for actor in kept.get("bypass_actors") or []
+        ]
     return {
         "name": RULESET_NAME,
         "target": "branch",
         "enforcement": "active",
         "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
-        "bypass_actors": BYPASS[plan.get("bypass") or "none"],
+        "bypass_actors": bypass_actors,
         "rules": rules,
     }
 
@@ -186,7 +200,8 @@ def check_plan(plan):
     if ruleset:
         if ruleset.get("resolve_threads") and not ruleset.get("require_pull_request"):
             problems.append("resolving threads is part of the pull request rule, which the plan leaves out")
-        if (ruleset.get("approvals") or 0) and not ruleset.get("require_pull_request"):
+        # Even 0: a kept pull request rule would go on requiring its old count.
+        if ruleset.get("approvals") is not None and not ruleset.get("require_pull_request"):
             problems.append("required approvals are part of the pull request rule, which the plan leaves out")
         if (ruleset.get("bypass") or "none") not in BYPASS:
             problems.append(f'unknown bypass "{ruleset.get("bypass")}"')
@@ -250,8 +265,15 @@ def mismatches(body, back, roles):
     if not matches(body["bypass_actors"], back.get("bypass_actors") or []):
         found.append(f"its bypass list is {json.dumps(back.get('bypass_actors'))}, not {json.dumps(body['bypass_actors'])}")
     # Every bypass this skill grants is to the admin role; GitHub's names for it confirm the role ID.
-    wanted_roles = sorted(("admin", actor["bypass_mode"].upper()) for actor in body["bypass_actors"])
-    got_roles = sorted(((role["role"] or "").lower(), (role["mode"] or "").upper()) for role in roles)
+    # Any other actor is one kept from the bypass list, and the comparison above covers it.
+    wanted_roles = sorted(
+        ("admin", actor["bypass_mode"].upper())
+        for actor in body["bypass_actors"]
+        if actor.get("actor_type") == "RepositoryRole" and actor.get("actor_id") == ADMIN_ROLE
+    )
+    got_roles = sorted(
+        ("admin", (role["mode"] or "").upper()) for role in roles if (role["role"] or "").lower() == "admin"
+    )
     if got_roles != wanted_roles:
         wanted_named = [{"role": role, "mode": mode} for role, mode in wanted_roles]
         found.append(f"GitHub names its bypass {json.dumps(roles)}, not {json.dumps(wanted_named)}")

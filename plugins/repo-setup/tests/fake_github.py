@@ -178,7 +178,10 @@ class FakeGitHub:
                 "nodes": [
                     {
                         "bypassMode": actor["bypass_mode"].upper(),
-                        "repositoryRoleName": "admin" if actor["actor_id"] == ADMIN_ROLE else "maintain",
+                        # Only a role has a role name; an app or a team has none.
+                        "repositoryRoleName": None
+                        if actor["actor_type"] != "RepositoryRole"
+                        else "admin" if actor["actor_id"] == ADMIN_ROLE else "maintain",
                     }
                     for actor in ruleset["bypass_actors"]
                 ]
@@ -243,3 +246,4 @@ def checks_rule(*names):
 
 FORCE_PUSH_AND_DELETION = [{"type": "non_fast_forward"}, {"type": "deletion"}]
 ADMINS_PULL_REQUEST = [{"actor_id": ADMIN_ROLE, "actor_type": "RepositoryRole", "bypass_mode": "pull_request"}]
+RELEASE_APP = {"actor_id": 42, "actor_type": "Integration", "bypass_mode": "always"}  # a GitHub App

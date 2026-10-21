@@ -69,9 +69,12 @@ Multi-select questions start with nothing ticked, so say in the first question t
    Say that rulesets grant a bypass to a role, not to one person, which on a personal
    repository is the owner alone.
 
-`resolve_threads` and approvals belong to the pull request rule: if the user picks either
-without `require_pull_request`, say so and ask whether to add it. Questions 3 and 4 matter only
-with a ruleset; skip them when no rule from question 2 is chosen.
+`resolve_threads` and approvals belong to the pull request rule, so the plan carries `approvals`
+only with `require_pull_request`, and `apply.py` refuses it otherwise, even 0. If the user picks
+`resolve_threads` without `require_pull_request`, or an approvals answer that would change
+something (one other than `approvals.current`, or above 0 when that is null), say so and ask
+whether to add the rule; otherwise leave `approvals` out of the plan. Questions 3 and 4 matter
+only with a ruleset; skip them when no rule from question 2 is chosen.
 
 When `rulesets.ours` is set, its rules are in force, and the user ticks only some of them,
 say that a rule left unticked stays as it is: a later run adds rules and sets what the plan
@@ -99,7 +102,8 @@ Write the plan to a file in the scratchpad (or `mktemp -d`), using only what was
 }
 ```
 
-`"ruleset": null` when no rule was chosen. Then:
+`"ruleset": null` when no rule was chosen. On a later run, a plan without `approvals` keeps the
+pull request rule's count, and one without `bypass` keeps the bypass list. Then:
 
 ```bash
 python3 -I ${CLAUDE_SKILL_DIR}/scripts/apply.py --plan <plan file>
