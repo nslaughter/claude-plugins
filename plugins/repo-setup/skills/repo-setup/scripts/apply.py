@@ -34,10 +34,10 @@ Other rulesets and classic branch protection are never touched. With
 it prints a report: each setting before and after, whether it was saved,
 and whether the read-back matches what was asked. A setting saved but not
 read back has `after` null and isn't ok, and the ruleset is still
-applied. For the ruleset, every value saved is
-compared: its rules and their parameters, its branch condition, its
-enforcement and its bypass list, with each bypass role and mode as GitHub's
-GraphQL API names them. `ruleset.mismatches` says what reads back
+applied. For the ruleset, every value saved is compared: its name and
+target, its rules and their parameters, its branch condition, its
+enforcement and its bypass list, with each bypass role and mode as
+GitHub's GraphQL API names them. `ruleset.mismatches` says what reads back
 differently. Once the ruleset is saved the report names it, even if
 reading it back fails.
 
@@ -229,6 +229,9 @@ def matches(wanted, got):
 def mismatches(body, back, roles):
     """What reads back differently from the ruleset saved, in words; empty when nothing does."""
     found = []
+    for key in ("name", "target"):
+        if back.get(key) != body[key]:
+            found.append(f"its {key} is {json.dumps(back.get(key))}, not {json.dumps(body[key])}")
     if back.get("enforcement") != body["enforcement"]:
         found.append(f"its enforcement is {back.get('enforcement')}, not {body['enforcement']}")
     if not matches(body["conditions"], back.get("conditions")):

@@ -109,7 +109,8 @@ It creates the ruleset "repo-setup: default branch", or updates it in place on a
 keeping the rules and parameters the plan doesn't choose. A ruleset that isn't active enforces
 nothing, so it keeps none of its rules and becomes active with only the rules chosen. It
 prints a report and exits 1 if any change failed or reads back differently: for the ruleset,
-every value it saved is compared, down to each rule's parameters and the bypass mode.
+every value it saved is compared, from its name and target down to each rule's parameters
+and the bypass mode.
 `--dry-run` prints the calls instead; use it when the user asks what would change.
 
 ## 4. Report

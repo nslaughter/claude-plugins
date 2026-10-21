@@ -156,6 +156,20 @@ class ReadBackTest(ApplyTest):
 
         self.assert_reads_back_differently(every_branch)
 
+    def test_a_name_that_reads_back_differently_fails(self):
+        def renamed(ruleset):
+            ruleset["name"] = "renamed"
+
+        mismatches = self.assert_reads_back_differently(renamed)
+        self.assertTrue(any("name" in mismatch for mismatch in mismatches), mismatches)
+
+    def test_a_target_that_reads_back_differently_fails(self):
+        def tags(ruleset):
+            ruleset["target"] = "tag"
+
+        mismatches = self.assert_reads_back_differently(tags)
+        self.assertTrue(any("target" in mismatch for mismatch in mismatches), mismatches)
+
     def test_names_the_saved_ruleset_when_reading_it_back_fails(self):
         self.github.failing.add(("GET", f"repos/octo/widgets/rulesets/{self.github.next_id}"))
         code, out = self.apply_plan(FULL_RULESET)
