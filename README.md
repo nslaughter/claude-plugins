@@ -31,3 +31,7 @@ plugins/<plugin>/
    `{ "name": "<plugin>", "source": "./plugins/<plugin>", "description": "..." }`
 3. Run `claude plugin validate .` before pushing.
 4. Bump `version` in a plugin's `plugin.json` whenever it changes. Installed copies update only when the version changes.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
