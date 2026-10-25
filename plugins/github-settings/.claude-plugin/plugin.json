@@ -1,0 +1,8 @@
+{
+  "name": "github-settings",
+  "version": "0.1.0",
+  "description": "Sets up a GitHub repository's merge settings and default-branch ruleset, offering only what its plan and your access allow. Needs gh and Python 3.",
+  "author": {
+    "name": "Nathan Slaughter"
+  }
+}
