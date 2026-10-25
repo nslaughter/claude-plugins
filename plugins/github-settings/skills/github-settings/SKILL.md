@@ -1,10 +1,10 @@
 ---
-name: repo-setup
+name: github-settings
 description: Set up a GitHub repository's merge settings and default-branch protection. Squash merges only, with the pull request's title and description as the commit; branches deleted after merging; auto-merge off; and a ruleset on the default branch that requires pull requests, passing checks and resolved review threads, blocks force pushes and deletion, and sets required approvals with an optional bypass for the repository's admins. It checks which settings the repository's plan and the user's access allow, asks which to apply, applies them with gh, and reads them back. Use when the user asks to set up, configure, harden or protect a repository or its main branch, to set squash-merge or other merge settings, to add branch protection or a ruleset, or to require checks or approvals.
 argument-hint: "[owner/repo]"
 ---
 
-# Repo setup
+# GitHub settings
 
 Arguments: $ARGUMENTS
 
@@ -118,7 +118,8 @@ pull request rule's count, and one without `bypass` keeps the bypass list. Then:
 python3 -I ${CLAUDE_SKILL_DIR}/scripts/apply.py --plan <plan file>
 ```
 
-It creates the ruleset "repo-setup: default branch", or updates it in place on a later run,
+It creates the ruleset "repo-setup: default branch" (the plugin's first name, kept so rulesets
+made earlier are still found), or updates it in place on a later run,
 keeping the rules and parameters the plan doesn't choose. A ruleset that GitHub doesn't enforce
 on the default branch (`targets_default_branch` false: it isn't active, or its conditions were
 changed to other branches) keeps none of its rules or bypass list, and becomes active on the

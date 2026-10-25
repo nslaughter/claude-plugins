@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply the settings chosen in repo-setup to a repository, then read them back.
+"""Apply the settings chosen in github-settings to a repository, then read them back.
 
 Usage:
   apply.py --plan plan.json [--dry-run]
@@ -59,6 +59,7 @@ import subprocess
 import sys
 from urllib.parse import quote
 
+# The ruleset keeps the plugin's first name, so one an earlier run made is still found.
 RULESET_NAME = "repo-setup: default branch"
 RULE_CHOICES = ("require_pull_request", "checks", "block_force_push_and_deletion")
 ADMIN_ROLE = 5  # The built-in repository admin role, as rulesets name it.

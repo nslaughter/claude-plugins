@@ -1,7 +1,7 @@
 """Tests for detect.py, against a fake GitHub: no network and no `gh`.
 
 Run from the repository's root:
-  python3 -m unittest discover -s plugins/repo-setup/tests
+  python3 -m unittest discover -s plugins/github-settings/tests
 """
 
 import contextlib

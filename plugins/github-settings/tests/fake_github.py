@@ -17,13 +17,13 @@ import sys
 from unittest import mock
 from urllib.parse import parse_qs, unquote, urlsplit
 
-SCRIPTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skills", "repo-setup", "scripts")
+SCRIPTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skills", "github-settings", "scripts")
 ADMIN_ROLE = 5
 
 
 def load(name):
     """Import one of the skill's scripts as a module."""
-    spec = importlib.util.spec_from_file_location(f"repo_setup_{name}", os.path.join(SCRIPTS, f"{name}.py"))
+    spec = importlib.util.spec_from_file_location(f"github_settings_{name}", os.path.join(SCRIPTS, f"{name}.py"))
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module

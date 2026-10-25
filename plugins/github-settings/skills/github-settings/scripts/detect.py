@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report which settings repo-setup can apply to a repository, and how each stands now.
+"""Report which settings github-settings can apply to a repository, and how each stands now.
 
 Usage:
   detect.py [owner/name]    (defaults to the current directory's repository)
@@ -37,6 +37,7 @@ import subprocess
 import sys
 from urllib.parse import quote
 
+# The ruleset keeps the plugin's first name, so one an earlier run made is still found.
 RULESET_NAME = "repo-setup: default branch"
 ADMIN_ROLE = 5  # The built-in repository admin role, as rulesets name it.
 PER_PAGE = 100
