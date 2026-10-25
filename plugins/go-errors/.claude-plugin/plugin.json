@@ -1,0 +1,8 @@
+{
+  "name": "go-errors",
+  "version": "0.1.0",
+  "description": "Go error handling: finds swallowed errors, unchecked Close calls, shadowed errors, and misused errors.Is and errors.As, and wraps bare return err statements with context.",
+  "author": {
+    "name": "Nathan Slaughter"
+  }
+}

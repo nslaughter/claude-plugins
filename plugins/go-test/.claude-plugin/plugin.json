@@ -1,0 +1,8 @@
+{
+  "name": "go-test",
+  "version": "0.1.0",
+  "description": "Go tests: table-driven, adversarial, fuzz, property, txtar script tests, mocks, benchmarks, coverage gaps, and benchmark comparison between two git states. Each skill checks that its kind of test fits the code and points to a better one when it doesn't.",
+  "author": {
+    "name": "Nathan Slaughter"
+  }
+}

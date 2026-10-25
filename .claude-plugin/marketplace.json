@@ -8,6 +8,16 @@
   },
   "plugins": [
     {
+      "name": "go-errors",
+      "source": "./plugins/go-errors",
+      "description": "Go error handling: finds swallowed errors, unchecked Close calls, shadowed errors, and misused errors.Is and errors.As, and wraps bare return err statements with context."
+    },
+    {
+      "name": "go-test",
+      "source": "./plugins/go-test",
+      "description": "Go tests: table-driven, adversarial, fuzz, property, txtar script tests, mocks, benchmarks, coverage gaps, and benchmark comparison between two git states. Needs Go; benchmark comparison uses benchstat when it's installed."
+    },
+    {
       "name": "iterative-review",
       "source": "./plugins/iterative-review",
       "description": "Runs a review-and-fix loop on a pull request: Codex and a fresh Claude reviewer review in parallel, a Claude fix agent addresses the findings, Codex reviews the fixes, and Claude fixes again. Needs gh; the Codex CLI is optional."
