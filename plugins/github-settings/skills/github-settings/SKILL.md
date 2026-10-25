@@ -2,6 +2,7 @@
 name: github-settings
 description: Set up a GitHub repository's merge settings and default-branch protection. Squash merges only, with the pull request's title and description as the commit; branches deleted after merging; auto-merge off; and a ruleset on the default branch that requires pull requests, passing checks and resolved review threads, blocks force pushes and deletion, and sets required approvals with an optional bypass for the repository's admins. It checks which settings the repository's plan and the user's access allow, asks which to apply, applies them with gh, and reads them back. Use when the user asks to set up, configure, harden or protect a repository or its main branch, to set squash-merge or other merge settings, to add branch protection or a ruleset, or to require checks or approvals.
 argument-hint: "[owner/repo]"
+disable-model-invocation: true
 ---
 
 # GitHub settings
