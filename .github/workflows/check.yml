@@ -1,0 +1,36 @@
+# Validates the marketplace and every plugin, and runs each plugin's tests.
+# Required on main once a pull request with it has merged: name "check" in /github-settings.
+name: Check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate the marketplace and each plugin
+        run: |
+          npm install --global --no-fund --no-audit @anthropic-ai/claude-code@2.1.302
+          claude plugin validate .
+          for plugin in plugins/*/; do
+            claude plugin validate "$plugin"
+          done
+
+      - name: Run each plugin's tests
+        run: |
+          for tests in plugins/*/tests; do
+            [ -d "$tests" ] || continue
+            echo "== $tests"
+            python3 -m unittest discover -s "$tests"
+          done
