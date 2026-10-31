@@ -29,5 +29,5 @@ plugins/<plugin>/
 1. Create `plugins/<plugin>/` with its `.claude-plugin/plugin.json`.
 2. Add an entry to `plugins` in `.claude-plugin/marketplace.json`:
    `{ "name": "<plugin>", "source": "./plugins/<plugin>", "description": "..." }`
-3. Run `claude plugin validate .` before pushing.
+3. Run `claude plugin validate .` before pushing. Put a plugin's tests in `plugins/<plugin>/tests/`, as standard-library `unittest` files. The `check` workflow validates the marketplace and every plugin, and runs those tests, on each pull request.
 4. Bump `version` in a plugin's `plugin.json` whenever it changes. Installed copies update only when the version changes.
