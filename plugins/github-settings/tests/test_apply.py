@@ -4,6 +4,7 @@ Run from the repository's root:
   python3 -m unittest discover -s plugins/github-settings/tests
 """
 
+import copy
 import json
 import os
 import tempfile
@@ -82,6 +83,33 @@ class LookupTest(ApplyTest):
 
 
 class LaterRunTest(ApplyTest):
+    def test_updates_the_ruleset_the_first_run_made(self):
+        first = dict(FULL_RULESET)
+        del first["checks"]
+        code, out = self.apply_plan(first)
+        self.assertEqual((code, out["ruleset"]["action"]), (0, "created"), out)
+        ours = out["ruleset"]["id"]
+        saved = {rule["type"]: copy.deepcopy(rule) for rule in self.github.rulesets[ours]["rules"]}
+        del self.github.calls[:]
+
+        # A later run that adds the checks main should require, as the skill plans it: approvals unchanged.
+        later = dict(FULL_RULESET, checks=["test", "lint"])
+        del later["approvals"]
+        code, out = self.apply_plan(later)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out["ruleset"]["action"], "updated")
+        self.assertTrue(out["ruleset"]["ok"], out)
+        writes = [(method, path) for method, path, _ in self.github.calls if method in ("PUT", "POST") and "rulesets" in path]
+        self.assertEqual(writes, [("PUT", f"repos/octo/widgets/rulesets/{ours}")])
+        self.assertEqual(list(self.github.rulesets), [ours])
+        (body,) = [body for method, _, body in self.github.calls if method == "PUT"]
+        rules = {rule["type"]: rule for rule in body["rules"]}
+        self.assertEqual(set(rules), {"pull_request", "required_status_checks", "non_fast_forward", "deletion"})
+        self.assertEqual(rules["required_status_checks"], checks_rule("test", "lint"))
+        # The parameters GitHub filled in go back as it saved them, a parameter the skill doesn't know included.
+        self.assertEqual(rules["pull_request"], saved["pull_request"])
+        self.assertTrue(rules["pull_request"]["parameters"]["require_extra_approval_for_unattributed_changes"])
+
     def test_keeps_the_rules_left_unticked(self):
         ours = self.github.add_ruleset(
             RULESET_NAME,

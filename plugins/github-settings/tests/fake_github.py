@@ -181,6 +181,7 @@ class FakeGitHub:
             if rule["type"] == "pull_request":
                 rule["parameters"].setdefault("required_reviewers", [])
                 rule["parameters"].setdefault("allowed_merge_methods", ["merge", "squash", "rebase"])
+                rule["parameters"].setdefault("require_extra_approval_for_unattributed_changes", True)
         if self.after_save is not None:
             self.after_save(ruleset)
         return copy.deepcopy(ruleset)
