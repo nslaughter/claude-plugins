@@ -30,8 +30,10 @@ the plan adds rules and sets the parameters it names, and never removes a
 rule or turns off thread resolution. "checks" replaces the list of required
 checks. A plan without "approvals" keeps the pull request rule's count (0
 on a new rule), and one without "bypass" keeps the bypass list (nobody on
-a new ruleset). A ruleset that GitHub doesn't enforce on the default
-branch, because it isn't active or its conditions were changed to other
+a new ruleset). An update also keeps the branches the ruleset applies
+to, so one widened on GitHub to other branches still covers them. A
+ruleset that GitHub doesn't enforce on the default branch, because it
+isn't active or its conditions were changed to other
 branches, enforces nothing there, so its rules and bypass list aren't kept,
 and the update makes it active on the default branch with only the rules
 chosen. Whether GitHub enforces it there is GitHub's own answer, from its
@@ -156,7 +158,9 @@ def ruleset_body(plan, enforced=None):
     enforces it on the default branch, or None. Its rules and parameters the
     plan doesn't choose are kept, so a later run never drops a protection the
     user left unticked, and so is its bypass list when the plan names no
-    bypass.
+    bypass. So are its conditions: GitHub enforces it on the default branch,
+    so they match that branch, and any branch it was widened to on GitHub
+    stays protected.
     """
     kept = enforced or {}
     rules = [
@@ -206,11 +210,12 @@ def ruleset_body(plan, enforced=None):
             {key: copy.deepcopy(value) for key, value in actor.items() if key in ("actor_id", "actor_type", "bypass_mode")}
             for actor in kept.get("bypass_actors") or []
         ]
+    conditions = copy.deepcopy(kept.get("conditions") or {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}})
     return {
         "name": RULESET_NAME,
         "target": "branch",
         "enforcement": "active",
-        "conditions": {"ref_name": {"include": ["~DEFAULT_BRANCH"], "exclude": []}},
+        "conditions": conditions,
         "bypass_actors": bypass_actors,
         "rules": rules,
     }
@@ -277,7 +282,7 @@ def mismatches(body, back, roles):
     if back.get("enforcement") != body["enforcement"]:
         found.append(f"its enforcement is {back.get('enforcement')}, not {body['enforcement']}")
     if not matches(body["conditions"], back.get("conditions")):
-        found.append(f"it targets {json.dumps(back.get('conditions'))}, not only the default branch")
+        found.append(f"it targets {json.dumps(back.get('conditions'))}, not {json.dumps(body['conditions'])}")
     got = {rule.get("type"): rule for rule in back.get("rules") or []}
     for rule in body["rules"]:
         if rule["type"] not in got:

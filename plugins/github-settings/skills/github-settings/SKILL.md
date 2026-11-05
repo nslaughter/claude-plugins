@@ -121,7 +121,8 @@ python3 -I ${CLAUDE_SKILL_DIR}/scripts/apply.py --plan <plan file>
 
 It creates the ruleset "repo-setup: default branch" (the plugin's first name, kept so rulesets
 made earlier are still found), or updates it in place on a later run,
-keeping the rules and parameters the plan doesn't choose. A ruleset that GitHub doesn't enforce
+keeping the rules and parameters the plan doesn't choose, and the branches it applies to. A
+ruleset that GitHub doesn't enforce
 on the default branch (`targets_default_branch` false: it isn't active, or its conditions were
 changed to other branches) keeps none of its rules or bypass list, and becomes active on the
 default branch with only the rules chosen. It

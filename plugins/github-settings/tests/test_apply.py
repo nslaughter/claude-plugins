@@ -110,6 +110,18 @@ class LaterRunTest(ApplyTest):
         self.assertEqual(rules["pull_request"], saved["pull_request"])
         self.assertTrue(rules["pull_request"]["parameters"]["require_extra_approval_for_unattributed_changes"])
 
+    def test_keeps_the_branches_a_ruleset_was_widened_to(self):
+        # Widened on GitHub to the release branches too, and still enforced on the default branch.
+        widened = {"ref_name": {"include": ["~DEFAULT_BRANCH", "refs/heads/release/*"], "exclude": []}}
+        ours = self.github.add_ruleset(
+            RULESET_NAME, rules=FORCE_PUSH_AND_DELETION, bypass_actors=ADMINS_PULL_REQUEST, conditions=copy.deepcopy(widened)
+        )
+        code, out = self.apply_plan({"require_pull_request": True, "checks": ["test"]})
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out["ruleset"]["action"], "updated")
+        self.assertTrue(out["ruleset"]["ok"], out)
+        self.assertEqual(self.github.rulesets[ours]["conditions"], widened)
+
     def test_keeps_the_rules_left_unticked(self):
         ours = self.github.add_ruleset(
             RULESET_NAME,
