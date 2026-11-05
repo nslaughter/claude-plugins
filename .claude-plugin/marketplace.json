@@ -16,6 +16,11 @@
       "name": "next-item",
       "source": "./plugins/next-item",
       "description": "Does the next item of a repository's implementation plan by following the \"Doing the next item\" section of its AGENTS.md."
+    },
+    {
+      "name": "github-settings",
+      "source": "./plugins/github-settings",
+      "description": "Sets up a GitHub repository's merge settings and default-branch ruleset, offering only what its plan and your access allow. Needs gh and Python 3."
     }
   ]
 }
